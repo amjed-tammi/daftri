@@ -1,9 +1,9 @@
 ﻿# إعدادات مشتركة بين ملف التشغيل وملف التثبيت
-function Get-DaftariLaunch {
+function Get-DaftariLaunch([string]$Query = '') {
   $root = Split-Path -Parent $PSScriptRoot
   $app = Join-Path $root 'app\index.html'
   if (-not (Test-Path $app)) { throw "لم أجد ملف التطبيق: $app" }
-  $uri = ([System.Uri]$app).AbsoluteUri
+  $uri = ([System.Uri]$app).AbsoluteUri + $Query
 
   $candidates = @(
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",

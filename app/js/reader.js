@@ -12,7 +12,7 @@ const Reader = {
     const b = await DB.get('books', bookId);
     if (!b) return;
     if (this.book) { Editor.flushAll(); this.saveBook(); }
-    b.paper = { ...PAPER_DEFAULT, ...(b.paper || {}) };
+    b.paper = { ...Settings.newPaper(), ...(b.paper || {}) };
     const recs = await DB.getMany('pages', b.pageIds);
     this.book = b;
     this.pages = recs.map((p, i) => p || { id: b.pageIds[i], bookId: b.id, html: '', stickies: [], attach: [] });
@@ -20,6 +20,8 @@ const Reader = {
     if (!this.pages.length) this.addPages(2, false);
     this.s = gotoPage != null ? Math.floor(gotoPage / 2) : (b.lastSpread != null ? b.lastSpread : -1);
     this.s = clamp(this.s, -1, this.pages.length / 2 - 1);
+    // جولة المكتبة ما إلها معنى جوّا الكتاب
+    if (Tour.active === 'lib') Tour.end(false);
     $('#library').hidden = true;
     $('#reader').hidden = false;
     Editor.dockSync();
@@ -30,10 +32,13 @@ const Reader = {
     this.updateBars();
     Bars.flash();
     Study.onBookOpen(b);
+    Music.onBookOpen(b);
+    Sound.warm(); // فتح الكتاب كان بضغطة، فمنجهّز صوت التقليب من هلق
     Tour.maybe('book'); // جولة الكتاب أول مرة
   },
   close() {
     Study.onBookClose();
+    Music.onBookClose();
     Editor.flushAll();
     this.saveBook();
     Editor.unbindAll();
@@ -123,6 +128,8 @@ const Reader = {
     Stickies.renderAll(pg, p, live);
     Attach.render(pg, p, live);
     if (live) IdeaWeb.badge(pg, p);
+    // التفاف النص حول العناصر: بعد ما تنضاف الصفحة للشاشة
+    queueMicrotask(() => Wrap.apply(pg, p));
     Media.hydrate(pg);
     if (live) Editor.bind(pg, p);
     return pg;
@@ -168,8 +175,12 @@ const Reader = {
   setLeaf(leaf, p) {
     const sign = leaf.classList.contains('on-right') ? -1 : 1;
     leaf.style.transform = `rotateY(${(sign * 180 * p).toFixed(2)}deg)`;
-    leaf.style.setProperty('--p', p.toFixed(3));
-    $('#bookInner').style.setProperty('--lp', p.toFixed(3));
+    // المتغيرات بتنحط على العناصر الصغيرة اللي بتقرأها بس (الظلال)، مش على أب الكتاب كله:
+    // متغير على الأب بيجبر المتصفح يعيد حساب كل نص الصفحتين بكل إطار
+    const v = p.toFixed(3);
+    if (!leaf._sh) { leaf._sh = leaf.querySelectorAll('.shade'); this._casts = this._casts || document.querySelectorAll('#bookInner .cast'); }
+    leaf._sh.forEach(s => s.style.setProperty('--p', v));
+    this._casts.forEach(c => c.style.setProperty('--lp', v));
   },
   animate(leaf, p0, p1, ms) {
     return new Promise(res => {
@@ -342,89 +353,40 @@ const Reader = {
     $('#navbar').classList.toggle('rtl-book', b.dir === 'rtl');
   },
 
+  // إعدادات هالكتاب: الورق والكتابة والموسيقى والاتجاه والمشاركة
   paperPanel(anchor) {
-    const p = this.book.paper;
+    const b = this.book, p = b.paper;
+    b.music = b.music || { track: 'default', auto: null };
     const n = el(`<div class="panel paper-panel">
-      <h4>الورق</h4>
-      <div class="seg wrap" data-k="style">${PAPER_STYLES.map(([v, t]) => `<button data-v="${v}"><i class="mini ps-${v}"></i>${t}</button>`).join('')}</div>
-      <div class="swatches" data-k="tone">${PAPER_TONES.map(([v, t, c]) => `<button class="sw" data-v="${v}" title="${t}" style="--c:${c}"></button>`).join('')}</div>
-      <label class="rng"><span>المسافة بين السطور</span><input type="range" min="24" max="48" step="2" data-k="lh" value="${p.lh}"><b>${p.lh}</b></label>
-      <div class="lbl">لون السطور</div>
-      <div class="swatches" data-k="line">${LINE_COLORS.map(([c, t]) => `<button class="sw ${c === 'auto' ? 'auto' : ''}" data-v="${c}" title="${t}" style="--c:${c === 'auto' ? '#ccc' : c}"></button>`).join('')}</div>
-      <label class="chk"><input type="checkbox" data-k="margin" ${p.margin ? 'checked' : ''}> <span>خط الهامش الأحمر</span></label>
-      <h4>الكتابة</h4>
-      <div class="seg wrap" data-k="font">${FONTS.map(([v, t]) => `<button data-v="${v}" class="f-${v}">${t} Aa</button>`).join('')}</div>
-      <div class="fontrow"><span>الخط العربي</span><button class="fontpick" data-pick="ar"></button></div>
-      <div class="fontlist" data-list="ar" hidden></div>
-      <div class="fontrow"><span>الخط الإنجليزي</span><button class="fontpick" data-pick="en"></button></div>
-      <div class="fontlist" data-list="en" hidden></div>
-      <label class="rng"><span>حجم الخط</span><input type="range" min="14" max="28" step="1" data-k="fs" value="${p.fs}"><b>${p.fs}</b></label>
-      <label class="rng"><span>حجم العربي مقابل الإنجليزي</span><input type="range" min="70" max="160" step="5" data-k="arScale" value="${p.arScale || 100}"><b>${p.arScale || 100}%</b></label>
-      <div class="lbl">لون الحبر</div>
-      <div class="swatches" data-k="ink">${INKS.map(c => `<button class="sw" data-v="${c}" style="--c:${c}"></button>`).join('')}</div>
+      <div class="pp-head">${ic('sliders')} <b>إعدادات «${esc(b.title)}»</b></div>
+      <div class="pp-ui"></div>
+      <h4>${ic('music')} موسيقى هالكتاب</h4>
+      <select class="inp" data-k="music">${Settings.musicOptions(b.music.track || 'default')}</select>
+      <label class="chk"><input type="checkbox" data-k="mauto" ${(b.music.auto != null ? b.music.auto : Settings.d.music.auto) ? 'checked' : ''}> <span>شغّلها لحالها لما أفتح هالكتاب</span></label>
       <h4>الكتاب</h4>
       <div class="seg" data-k="dir"><button data-v="rtl">يفتح من اليمين</button><button data-v="ltr">يفتح من اليسار</button></div>
-      <label class="chk"><input type="checkbox" data-k="flipSound" ${localStorage.getItem('flipSound') === '0' ? '' : 'checked'}> <span>صوت تقليب الورق</span></label>
+      <div class="row"><button class="btn ghost sm" data-a="share">${ic('share')} مشاركة الكتاب (.daftar)</button><button class="btn ghost sm" data-a="defaults">${ic('gear')} الإعدادات العامة</button></div>
     </div>`);
-    const sync = () => {
-      $$('[data-k=style] button', n).forEach(b => b.classList.toggle('on', b.dataset.v === p.style));
-      $$('[data-k=tone] button', n).forEach(b => b.classList.toggle('on', b.dataset.v === p.tone));
-      $$('[data-k=line] button', n).forEach(b => b.classList.toggle('on', b.dataset.v === (p.line || 'auto')));
-      $$('[data-k=font] button', n).forEach(b => b.classList.toggle('on', b.dataset.v === p.font && !p.fontCustom));
-      const fa = FontKit.ar(p), fe = FontKit.en(p);
-      const ba = $('[data-pick=ar]', n), be = $('[data-pick=en]', n);
-      ba.textContent = FontKit.label('ar', fa) + ' · أبجد'; ba.style.fontFamily = `"${fa}"`;
-      be.textContent = FontKit.label('en', fe) + ' · Abc'; be.style.fontFamily = `"${fe}"`;
-      $$('[data-k=ink] button', n).forEach(b => b.classList.toggle('on', b.dataset.v === p.ink));
-      $$('[data-k=dir] button', n).forEach(b => b.classList.toggle('on', b.dataset.v === this.book.dir));
-    };
-    const apply = (full) => { this.saveBook(); this.applyPaper(); if (full) { Editor.flushAll(); this.render(); } sync(); };
-    n.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
+    const syncDir = () => $$('[data-k=dir] button', n).forEach(x => x.classList.toggle('on', x.dataset.v === b.dir));
+    $('.pp-ui', n).append(PaperUI.make(p, {
+      onChange: (k, full) => {
+        if (k === 'style') this.pages.forEach(pg => { if (pg.style) { pg.style = null; DB.put('pages', pg); } });
+        this.saveBook(); this.applyPaper();
+        if (full) { Editor.flushAll(); this.render(); }
+      },
+    }));
     n.addEventListener('click', e => {
-      const pick = e.target.closest('[data-pick]');
-      if (pick) {
-        const kind = pick.dataset.pick, list = $(`[data-list=${kind}]`, n);
-        const open = list.hidden;
-        $$('.fontlist', n).forEach(x => x.hidden = true);
-        if (open) { FontKit.fillList(list, kind, kind === 'ar' ? FontKit.ar(p) : FontKit.en(p)); list.hidden = false; }
-        return;
-      }
-      const f = e.target.closest('[data-font]');
-      if (f) {
-        const kind = f.closest('.fontlist').dataset.list;
-        if (kind === 'ar') p.fontAr = f.dataset.font; else p.fontEn = f.dataset.font;
-        p.fontCustom = true;
-        $$('.fontlist', n).forEach(x => x.hidden = true);
-        apply(true);
-        return;
-      }
-      const b = e.target.closest('button[data-v]'); if (!b) return;
-      const k = b.parentElement.dataset.k;
-      if (k === 'dir') { this.setDir(b.dataset.v); sync(); return; }
-      if (k === 'font') { p.font = b.dataset.v; delete p.fontAr; delete p.fontEn; p.fontCustom = false; p.arScale = 100; const r = $('[data-k=arScale]', n); r.value = 100; r.nextElementSibling.textContent = '100%'; apply(true); return; }
-      if (k === 'style') { p.style = b.dataset.v; this.pages.forEach(pg => { if (pg.style) { pg.style = null; DB.put('pages', pg); } }); apply(true); return; }
-      p[k] = b.dataset.v;
-      if (k === 'tone') fixInk(p);
-      apply(k === 'font');
-    });
-    n.addEventListener('input', e => {
-      const k = e.target.dataset.k;
-      if (k === 'arScale') { p.arScale = +e.target.value; e.target.nextElementSibling.textContent = p.arScale + '%'; FontKit.apply(p); this.saveBook(); return; }
-      if (k === 'lh' || k === 'fs') {
-        p[k] = +e.target.value;
-        if (k === 'fs') p.fs = Math.min(p.fs, Math.floor(p.lh * .8));
-        if (k === 'lh' && p.fs > p.lh * .8) { p.fs = Math.floor(p.lh * .8); $('[data-k=fs]', n).value = p.fs; $('[data-k=fs]', n).nextElementSibling.textContent = p.fs; }
-        e.target.nextElementSibling.textContent = p[k];
-        apply(false);
-      }
+      const d = e.target.closest('[data-k=dir] [data-v]'); if (d) { this.setDir(d.dataset.v); syncDir(); return; }
+      const a = e.target.closest('[data-a]'); if (!a) return;
+      if (a.dataset.a === 'share') { Pop.close(); Share.exportBook(b.id); }
+      else if (a.dataset.a === 'defaults') { Pop.close(); Settings.panel(); }
     });
     n.addEventListener('change', e => {
       const k = e.target.dataset.k;
-      if (k === 'lh' || k === 'fs' || k === 'arScale') { Editor.flushAll(); this.render(); }
-      else if (k === 'margin') { p.margin = e.target.checked; apply(true); }
-      else if (k === 'flipSound') localStorage.setItem('flipSound', e.target.checked ? '1' : '0');
+      if (k === 'music') { b.music.track = e.target.value; this.saveBook(); const r = Settings.bookMusic(b); if (r.track) Music.play(r.track); else Music.stop(); }
+      else if (k === 'mauto') { b.music.auto = e.target.checked; this.saveBook(); }
     });
-    sync();
+    syncDir();
     Pop.open(anchor, n, { cls: 'panel-pop' });
   },
 };

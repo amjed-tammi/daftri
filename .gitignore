@@ -1,5 +1,8 @@
 # الكتب والبيانات الشخصية ما بتنرفع أبداً
 *.daftari.json
+*.daftar
+*.exam.json
+app/inbox/
 backup*/
 Profile/
 Daftari/
@@ -11,3 +14,6 @@ Daftari/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# تقرير الاختبارات بيتولّد كل تشغيل
+tests/report/

@@ -166,20 +166,16 @@ const Voice = {
 
 /* ============ فيديو قصير داخل الصفحة ============ */
 const Media2 = {
-  async insertVideo(l, file) {
-    const saved = Sel.save();
+  // الفيديو بينحط على الصفحة كعنصر بتسحبه لأي مكان، والنص بيلتف حواليه
+  async insertVideo(l, file, pt) {
     file = file || await pickFile('video/*');
     if (!file) return;
     const mb = file.size / 1048576;
     if (mb > 250) { Toast.show({ icon: 'film', title: 'الفيديو كبير جداً', text: 'اختر فيديو أقصر (أقل من 250 ميجا).' }); return; }
     if (mb > 60 && !(await Modal.confirm('فيديو كبير', `حجم الفيديو ${mb.toFixed(0)} ميجا. سيُحفظ داخل الدفتر. متابعة؟`, { ok: 'أضفه' }))) return;
     const id = await Media.save(file);
-    l.c.focus();
-    if (saved && l.c.contains(saved.startContainer)) Sel.restore(saved);
-    const f = el(`<figure class="media" contenteditable="false"><video controls preload="metadata" playsinline data-blob="${id}"></video><button class="mx" title="إزالة الفيديو">${ic('x')}</button></figure>`);
-    Editor.insertBlock(l, f);
-    Media.hydrate(f);
-    Editor.changed(l);
+    Stickies.addVideo(l, id, pt);
+    Toast.show({ icon: 'film', text: 'اسحب الفيديو من شريطه الفوقاني لأي مكان بالصفحة', timeout: 3000 });
   },
 };
 
@@ -298,68 +294,110 @@ const Rope = {
   swing() { const r = $('#rope'); r.classList.remove('swing'); void r.offsetWidth; r.classList.add('swing'); },
 };
 
-/* ============ تذكير المي والحركة ============ */
+/* ============ التذكيرات: الطالب بيعملها بنفسه ============ */
 const Reminders = {
-  cfg: { water: { on: true, every: 40 }, move: { on: true, every: 50 }, sound: true, sys: false },
-  last: {},
-  MSG: {
-    water: [['اشرب مي 💧', 'كاسة مي هلّأ بتفرق مع تركيزك.'], ['وقت المي 💧', 'جسمك بحاجة ماء… اشرب كم رشفة.'], ['ترطيب 💧', 'المخ ٧٥٪ ماء — اسقيه.']],
-    move: [['قوم تحرّك 🚶', 'قوم امشي دقيقتين ومدّ ظهرك.'], ['استراحة حركة', 'حرّك رقبتك وكتافك، وريّح عيونك ٢٠ ثانية بعيد عن الشاشة.'], ['يلا وقفة', 'قوم عن الكرسي شوي… الكود مش رايح لمكان.']],
-  },
+  // القائمة بتبدأ فاضية — الطالب بيعمل تذكيراته بنفسه، وفي اقتراحات جاهزة بضغطة
+  list: [],
+  cfg: { sound: true, sys: false },
+  TEMPLATES: [
+    { icon: '💧', title: 'اشرب مي', text: 'كاسة مي هلّأ بتفرق مع تركيزك.', every: 40 },
+    { icon: '🚶', title: 'قوم تحرّك', text: 'قوم امشي دقيقتين ومدّ ظهرك.', every: 50 },
+    { icon: '👀', title: 'ريّح عيونك', text: 'طلّع على شي بعيد ٢٠ ثانية.', every: 20 },
+    { icon: '🧘', title: 'نفس عميق', text: 'خذ ٣ أنفاس عميقة وارجع.', every: 60 },
+    { icon: '📵', title: 'بعّد الجوال', text: 'خلي الجوال بعيد لحد ما تخلص.', every: 30 },
+  ],
+  EMOJIS: ['💧', '🚶', '👀', '🧘', '📵', '☕', '🍎', '📖', '✍️', '💤', '🧠', '⏰', '🌙', '⭐'],
   init() {
-    try { Object.assign(this.cfg, JSON.parse(localStorage.getItem('rem') || '{}')); } catch { }
-    try { this.last = JSON.parse(localStorage.getItem('remLast') || '{}'); } catch { this.last = {}; }
+    try { Object.assign(this.cfg, JSON.parse(localStorage.getItem('remCfg') || '{}')); } catch { }
+    try { this.list = JSON.parse(localStorage.getItem('reminders') || '[]'); } catch { this.list = []; }
     const now = Date.now();
-    ['water', 'move'].forEach(k => { if (!this.last[k] || now - this.last[k] > 6 * 3600e3) this.last[k] = now; });
-    this.saveLast();
+    this.list.forEach(r => { if (!r.last || now - r.last > 6 * 3600e3) r.last = now; });
+    this.save();
     setInterval(() => this.tick(), 20000);
   },
-  saveCfg() { localStorage.setItem('rem', JSON.stringify(this.cfg)); },
-  saveLast() { localStorage.setItem('remLast', JSON.stringify(this.last)); },
+  save() { localStorage.setItem('reminders', JSON.stringify(this.list)); localStorage.setItem('remCfg', JSON.stringify(this.cfg)); },
   tick() {
     const now = Date.now();
-    for (const k of ['water', 'move']) {
-      const c = this.cfg[k];
-      if (c.on && now - (this.last[k] || now) >= c.every * 60e3) { this.last[k] = now; this.saveLast(); this.fire(k); }
-    }
+    this.list.forEach(r => { if (r.on && now - (r.last || now) >= r.every * 60e3) { r.last = now; this.save(); this.fire(r); } });
   },
-  fire(k) {
-    const list = this.MSG[k], [title, text] = list[(Math.random() * list.length) | 0];
+  fire(r) {
     if (this.cfg.sound) Sound.chime(true);
     Toast.show({
-      icon: k === 'water' ? 'water' : 'walk', title, text, cls: 'rem ' + k, timeout: 60000, actions: [
-        { label: 'بعد ٥ د', act: () => { this.last[k] = Date.now() - (this.cfg[k].every - 5) * 60e3; this.saveLast(); } },
-        { label: k === 'water' ? 'شربت ✓' : 'تحركت ✓', primary: true },
+      emoji: r.icon, title: r.title, text: r.text || '', cls: 'rem', timeout: 60000, actions: [
+        { label: 'بعد ٥ د', act: () => { r.last = Date.now() - (r.every - 5) * 60e3; this.save(); } },
+        { label: 'تم ✓', primary: true },
       ],
     });
-    if (this.cfg.sys && document.hidden && window.Notification && Notification.permission === 'granted') new Notification(title, { body: text });
+    if (this.cfg.sys && document.hidden && window.Notification && Notification.permission === 'granted') new Notification(`${r.icon} ${r.title}`, { body: r.text || '' });
   },
+  add(t) { const r = { id: 'r' + uid(), icon: t.icon || '⏰', title: t.title, text: t.text || '', every: clamp(+t.every || 30, 1, 600), on: true, last: Date.now() }; this.list.push(r); this.save(); return r; },
   panel(anchor) {
-    const c = this.cfg;
-    const opt = (v, cur) => [15, 20, 30, 40, 45, 50, 60, 90].map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>كل ${m} دقيقة</option>`).join('');
     const n = el(`<div class="panel rem-panel">
-      <h4>${ic('moon')} وقتك الهادئ</h4>
-      <div class="rem-row">${ic('water')}<label class="chk"><input type="checkbox" data-k="water.on" ${c.water.on ? 'checked' : ''}> <span>ذكّرني أشرب مي</span></label><select class="inp sm" data-k="water.every">${opt(0, c.water.every)}</select></div>
-      <div class="rem-row">${ic('walk')}<label class="chk"><input type="checkbox" data-k="move.on" ${c.move.on ? 'checked' : ''}> <span>ذكّرني أقوم أتحرك</span></label><select class="inp sm" data-k="move.every">${opt(0, c.move.every)}</select></div>
-      <label class="chk"><input type="checkbox" data-k="sound" ${c.sound ? 'checked' : ''}> <span>صوت خفيف مع التذكير</span></label>
-      <label class="chk"><input type="checkbox" data-k="sys" ${c.sys ? 'checked' : ''}> <span>إشعار ويندوز إذا كانت النافذة مصغّرة</span></label>
-      <div class="lbl">${ic('timer')} المؤقت: اسحب الحبل المعلّق بأعلى الشاشة لأسفل — كل ما سحبت أكثر زاد الوقت.</div>
-      <div class="row"><button class="btn ghost sm" data-a="test">جرّب التذكير</button><button class="btn ghost sm" data-a="amb">${ic('music')} أصوات الجو</button><button class="btn ghost sm" data-a="journal">${ic('journal')} يومياتي</button></div>
+      <h4>${ic('bell')} تذكيراتي</h4>
+      <div class="rem-list"></div>
+      <div class="rem-sugg-h lbl">اقتراحات — ضغطة وبتنضاف:</div>
+      <div class="rem-sugg"></div>
+      <details class="rem-new"><summary>${ic('plus')} تذكير جديد من عندي</summary>
+        <div class="rem-emojis">${this.EMOJIS.map((e, i) => `<button type="button" data-e="${e}" class="${i === 11 ? 'on' : ''}">${e}</button>`).join('')}</div>
+        <input class="inp" data-f="title" dir="auto" placeholder="شو بدك أذكّرك؟ مثلاً: راجع الفصل الثالث">
+        <input class="inp" data-f="text" dir="auto" placeholder="ملاحظة صغيرة (اختياري)">
+        <label class="rng"><span>كل كم دقيقة</span><input type="number" class="inp sm" data-f="every" min="1" max="600" value="30"><b>د</b></label>
+        <button class="btn primary sm" data-a="create">إضافة</button>
+      </details>
+      <label class="chk"><input type="checkbox" data-k="sound" ${this.cfg.sound ? 'checked' : ''}> <span>صوت خفيف مع التذكير</span></label>
+      <label class="chk"><input type="checkbox" data-k="sys" ${this.cfg.sys ? 'checked' : ''}> <span>إشعار ويندوز إذا النافذة مصغّرة</span></label>
+      <div class="lbl">${ic('timer')} المؤقت: اسحب الحبل المعلّق فوق لتحت — كل ما سحبت أكثر زاد الوقت.</div>
+      <div class="row"><button class="btn ghost sm" data-a="music">${ic('music')} الموسيقى</button><button class="btn ghost sm" data-a="journal">${ic('journal')} يومياتي</button></div>
     </div>`);
-    n.addEventListener('change', async e => {
-      const k = e.target.dataset.k; if (!k) return;
-      const v = e.target.type === 'checkbox' ? e.target.checked : +e.target.value;
-      const [a, b] = k.split('.');
-      if (b) { c[a][b] = v; if (b === 'every' || b === 'on') { this.last[a] = Date.now(); this.saveLast(); } } else c[a] = v;
-      if (k === 'sys' && v && window.Notification && Notification.permission !== 'granted') {
-        const p = await Notification.requestPermission().catch(() => 'denied');
-        if (p !== 'granted') { c.sys = false; e.target.checked = false; Toast.show({ icon: 'bell', text: 'لم يُسمح بالإشعارات' }); }
+    let emoji = this.EMOJIS[11];
+    const render = () => {
+      $('.rem-list', n).innerHTML = this.list.length ? this.list.map(r => `<div class="rem-item ${r.on ? '' : 'off'}" data-id="${r.id}">
+          <span class="rem-ic">${esc(r.icon)}</span>
+          <div class="rem-t"><b dir="auto">${esc(r.title)}</b><small>كل ${r.every} دقيقة${r.text ? ' · ' + esc(r.text) : ''}</small></div>
+          <label class="sw-toggle" title="تشغيل/إيقاف"><input type="checkbox" data-t="on" ${r.on ? 'checked' : ''}><i></i></label>
+          <button class="ib" data-t="test" title="جرّبه">${ic('play')}</button>
+          <button class="ib" data-t="del" title="حذف">${ic('trash')}</button></div>`).join('')
+        : '<p class="muted rem-empty">ما في تذكيرات لسا. ضيف من الاقتراحات أو اعمل تذكير خاص فيك 👇</p>';
+      const have = new Set(this.list.map(r => r.title));
+      $('.rem-sugg', n).innerHTML = this.TEMPLATES.filter(t => !have.has(t.title)).map(t => `<button type="button" data-tpl="${esc(t.title)}">${t.icon} ${esc(t.title)} <small>كل ${t.every} د</small></button>`).join('') || '<small class="muted">ضفت كل الاقتراحات ✓</small>';
+    };
+    n.addEventListener('click', e => {
+      const tpl = e.target.closest('[data-tpl]');
+      if (tpl) { this.add(this.TEMPLATES.find(t => t.title === tpl.dataset.tpl)); render(); return; }
+      const em = e.target.closest('[data-e]');
+      if (em) { emoji = em.dataset.e; $$('[data-e]', n).forEach(x => x.classList.toggle('on', x === em)); return; }
+      const row = e.target.closest('.rem-item'), r = row && this.list.find(x => x.id === row.dataset.id);
+      const t = e.target.closest('[data-t]');
+      if (t && r) {
+        if (t.dataset.t === 'del') { this.list = this.list.filter(x => x !== r); this.save(); render(); }
+        else if (t.dataset.t === 'test') this.fire(r);
+        return;
       }
-      this.saveCfg();
+      const a = e.target.closest('[data-a]'); if (!a) return;
+      if (a.dataset.a === 'create') {
+        const title = $('[data-f=title]', n).value.trim();
+        if (!title) { $('[data-f=title]', n).focus(); return; }
+        this.add({ icon: emoji, title, text: $('[data-f=text]', n).value.trim(), every: $('[data-f=every]', n).value });
+        $('[data-f=title]', n).value = ''; $('[data-f=text]', n).value = '';
+        render();
+        Toast.show({ emoji, text: `انضاف التذكير: ${title}`, timeout: 2200 });
+      } else if (a.dataset.a === 'music') Music.panel($('#btnSound'));
+      else if (a.dataset.a === 'journal') { Pop.close(); Study.journalPanel(); }
     });
-    $('[data-a=test]', n).onclick = () => { Pop.close(); this.fire(Math.random() > .5 ? 'water' : 'move'); };
-    $('[data-a=amb]', n).onclick = () => Ambience.panel($('#btnSound'));
-    $('[data-a=journal]', n).onclick = () => { Pop.close(); Study.journalPanel(); };
+    n.addEventListener('change', async e => {
+      if (e.target.dataset.t === 'on') {
+        const r = this.list.find(x => x.id === e.target.closest('.rem-item').dataset.id);
+        r.on = e.target.checked; r.last = Date.now(); this.save(); e.target.closest('.rem-item').classList.toggle('off', !r.on); return;
+      }
+      const k = e.target.dataset.k; if (!k) return;
+      this.cfg[k] = e.target.checked;
+      if (k === 'sys' && e.target.checked && window.Notification && Notification.permission !== 'granted') {
+        const p = await Notification.requestPermission().catch(() => 'denied');
+        if (p !== 'granted') { this.cfg.sys = false; e.target.checked = false; Toast.show({ icon: 'bell', text: 'لم يُسمح بالإشعارات' }); }
+      }
+      this.save();
+    });
+    render();
     Pop.open(anchor, n, { cls: 'panel-pop', place: 'above' });
   },
 };
@@ -385,7 +423,7 @@ const Exporter = {
     const add = (node, cls = '') => { const s = el(`<section class="pp ${cls}"></section>`); s.append(node); box.append(s); return s; };
     add(R.coverPage('right'), 'pp-cover').style.setProperty('--cvbg', (R.book.cover && R.book.cover.color) || '#1d2b53');
     for (let i = 0; i <= last; i++) add(R.pageEl(i, false, R.sideOfIndex(i)));
-    $$('figure.media video', box).forEach(vd => vd.replaceWith(el(`<div class="vid-ph">${ic('film')}<span>فيديو مرفق داخل الدفتر</span></div>`)));
+    $$('figure.media video, .sticky.video video', box).forEach(vd => vd.replaceWith(el(`<div class="vid-ph">${ic('film')}<span>فيديو مرفق داخل الدفتر</span></div>`)));
     $$('.flipzone', box).forEach(x => x.remove());
     Toast.show({ icon: 'pdf', title: 'تصدير PDF', text: 'من نافذة الطباعة اختر «حفظ كـ PDF» أو «Microsoft Print to PDF» واضغط حفظ.', timeout: 6000 });
     await Media.hydrate(box);
@@ -428,9 +466,15 @@ const Backup = {
       ps.forEach(p => { pages.push(p); collectBlobs(p).forEach(x => ids2.add(x)); });
       if (b.cover && b.cover.image) ids2.add(b.cover.image);
     }
+    // المواد وملفات الـPDF والتقويم (للنسخة الكاملة كل شي، ولكتاب: ملفاته بس)
+    const sids = new Set(books.map(b => b.subjectId));
+    const subjects = (await DB.all('subjects')).filter(s => !s.sys && sids.has(s.id));
+    const files = (await DB.all('files')).filter(f => ids ? ids.includes(f.bookId) : true);
+    files.forEach(f => ids2.add(f.blob));
+    const plans = ids ? [] : await DB.all('plans');
     const blobs = [];
     for (const id of ids2) { const r = await DB.get('blobs', id); if (r) blobs.push({ id, type: r.type, data: await blobToDataURL(r.blob) }); }
-    const out = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pages.some(p => p.id === x.a) && pages.some(p => p.id === x.b)) })], { type: 'application/json' });
+    const out = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pages.some(p => p.id === x.a) && pages.some(p => p.id === x.b)), exams: (await DB.all('exams')).filter(x => books.some(b => b.id === x.bookId)), subjects, files, plans })], { type: 'application/json' });
     close();
     downloadBlob(out, (books.length === 1 ? books[0].title : 'مكتبة دفتري') + ' ' + new Date().toISOString().slice(0, 10) + '.daftari.json');
     Toast.show({ icon: 'download', text: 'حُفظت النسخة في مجلد التنزيلات (Downloads)', timeout: 4000 });
@@ -449,6 +493,8 @@ const Backup = {
       await DB.put('blobs', { id: bl.id, blob, type: bl.type || blob.type, size: blob.size });
     }
     for (const x of data.links || []) if (!(await DB.get('links', x.id))) await DB.put('links', x);
+    for (const x of data.exams || []) if (!(await DB.get('exams', x.id))) await DB.put('exams', x);
+    for (const st of ['subjects', 'files', 'plans']) for (const x of data[st] || []) if (!(await DB.get(st, x.id))) await DB.put(st, x);
     await IdeaWeb.load();
     let added = 0, skipped = 0;
     for (const b of data.books || []) {

@@ -191,6 +191,7 @@ const Trash = {
       await DB.delMany('pages', b.pageIds || []);
       await Media.del([...blobs]);
       await IdeaWeb.removeForPages(b.pageIds || []);
+      await Exams.removeForBook(b.id);
       const cards = (await DB.all('cards')).filter(c => c.bookId === b.id).map(c => c.id);
       if (cards.length) await DB.delMany('cards', cards);
     } else {

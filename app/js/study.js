@@ -126,11 +126,11 @@ const Study = {
   },
   reviewMenu(anchor) {
     Menu.open(anchor, [
-      { head: 'المراجعة' },
+      { head: 'المراجعة = أسئلة بترجعلك لحد ما تحفظها' },
       { icon: 'play', label: 'ابدأ مراجعة اليوم' + ($('#rvBadge').hidden ? '' : ` (${$('#rvBadge').textContent})`), act: () => this.startReview() },
       { icon: 'tape', label: (this.exam ? '✓ ' : '') + 'وضع الامتحان: خبّي كل الأجوبة', act: () => this.setExam(!this.exam) },
       '-',
-      { icon: 'cards', label: 'كيف أعمل سؤال مراجعة؟', act: () => Toast.show({ icon: 'cards', title: 'سؤال مراجعة', text: 'اكتب السؤال والجواب بالصفحة، حدّد الجواب، واضغط زر الشريط اللاصق 🩹 بشريط التنسيق.', timeout: 9000 }) },
+      { icon: 'cards', label: 'شو يعني مراجعة؟ وكيف أعمل سؤال؟', act: () => Toast.show({ icon: 'cards', title: 'المراجعة بثلاث خطوات', text: '١) اكتب سؤال وجوابه بالصفحة، حدّد الجواب واضغط 🩹 بشريط التنسيق — الجواب بيتغطّى بشريط لاصق. ٢) «ابدأ مراجعة اليوم» بيعرضلك الأسئلة المستحقة: بتفكر، بتكشف الجواب، وبتقول عرفته أو لا. ٣) اللي عرفته بيرجعلك بعد أيام أطول (١، ٣، ٧…)، واللي ما عرفته بيرجع بكرة. «وضع الامتحان» بيغطي كل الأجوبة بالكتاب لتسمّع لحالك.', timeout: 16000 }) },
       { icon: 'journal', label: 'يومياتي', act: () => this.journalPanel() },
     ]);
     if (Pop.cur) Pop.cur._from = '#topbar';
@@ -267,13 +267,13 @@ const Study = {
   sessionStart(mins, quiet = false) {
     this.session = { start: Date.now(), mins, amb: false };
     document.body.classList.add('in-session');
-    if (!quiet && Ambience.cfg.withSession && !Ambience.playing) { Ambience.play(); this.session.amb = true; }
+    if (!quiet && Music.forSession()) this.session.amb = true;
   },
   sessionEnd(done) {
     const s = this.session; if (!s) return;
     this.session = null;
     document.body.classList.remove('in-session');
-    if (s.amb) Ambience.stop();
+    if (s.amb) Music.stop();
     if (done) this.journalPrompt(s);
   },
   journalPrompt(s) {

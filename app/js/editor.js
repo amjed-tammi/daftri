@@ -78,9 +78,11 @@ const Editor = {
       this.curPage = i;
       document.execCommand('defaultParagraphSeparator', false, 'p');
       document.execCommand('styleWithCSS', false, true);
-      if (!c.firstChild) { c.innerHTML = '<p><br></p>'; setCaretAt(c.firstChild, 0); }
+      if (!c.querySelector(':scope > :not(.wrapx)')) { c.append(el('<p><br></p>')); setCaretAt(c.lastElementChild, 0); }
     });
     c.addEventListener('input', () => this.changed(l, true));
+    // الصفحة ورق: ما بتنزلق لفوق لما المؤشر يوصل لآخرها (المتصفح بيعمل هيك تلقائياً)
+    c.addEventListener('scroll', () => { if (c.scrollTop || c.scrollLeft) { c.scrollTop = 0; c.scrollLeft = 0; } });
     c.addEventListener('keydown', e => this.keydown(e, l));
     c.addEventListener('paste', e => this.paste(e, l));
     c.addEventListener('click', e => this.click(e, l));
@@ -99,7 +101,7 @@ const Editor = {
       const imgs = files.filter(f => f.type.startsWith('image/'));
       const vids = files.filter(f => f.type.startsWith('video/'));
       if (imgs.length) Stickies.addPhotos(l, imgs, pt);
-      if (vids.length) Media2.insertVideo(l, vids[0]);
+      if (vids.length) Media2.insertVideo(l, vids[0], pt);
     });
   },
   pagePoint(pg, x, y) {
@@ -117,6 +119,11 @@ const Editor = {
     return pg ? this.live.get(+pg.dataset.i) : null;
   },
   changed(l, fromInput = false) {
+    // لو انمسح شكل الالتفاف (تحديد الكل وحذف/لصق) بنرجّعه
+    if ((l.p.stickies || []).some(s => s.wrap !== false)) {
+      const f = l.c.firstElementChild;
+      if (!f || !f.classList.contains('wrapx')) Wrap.apply(l.pg, l.p);
+    }
     this.normalize(l.c);
     this.reflow(l);
     l.save();
@@ -124,6 +131,7 @@ const Editor = {
   serialize(c) {
     const k = c.cloneNode(true);
     $$('img[data-blob], video[data-blob]', k).forEach(m => m.removeAttribute('src'));
+    $$('.wrapx', k).forEach(x => x.remove());
     // أصناف العرض المؤقتة (التركيز/المراجعة) ما بتنحفظ
     $$('.is-current, .rv-focus, .rv-target, .shown', k).forEach(x => { x.classList.remove('is-current', 'rv-focus', 'rv-target', 'shown'); if (!x.className) x.removeAttribute('class'); });
     let h = k.innerHTML.trim();
@@ -156,6 +164,7 @@ const Editor = {
   reflowAll() { this.live.forEach(l => { if (l.c.isConnected) this.reflow(l, false); }); },
   reflow(l, follow = true) {
     const c = l.c;
+    c.scrollTop = 0; c.scrollLeft = 0; // القياس لازم يكون من أول الصفحة
     const limit = c.clientHeight;
     if (!limit || c.scrollHeight <= limit + 1) return;
     const s = getSelection();
@@ -172,7 +181,7 @@ const Editor = {
     let guard = 0;
     while (c.scrollHeight > limit + 1 && guard++ < 300) {
       const last = c.lastChild;
-      if (!last) break;
+      if (!last || (last.nodeType === 1 && last.classList.contains('wrapx'))) break;
       if (last.nodeType !== 1) { moved.unshift(last); last.remove(); continue; }
       if (relB(last) <= limit + 1) break;
       const only = c.childNodes.length === 1;
@@ -229,7 +238,10 @@ const Editor = {
       return rc ? (rc.bottom - M.top) / M.sc : -1;
     };
     if (bot(0) > limit + 1) return 'whole';
+    // المسافات بآخر الفقرة ما إلها مكان على السطر، فبنقيس على آخر حرف حقيقي
     let lo = 0, hi = total - 1;
+    const chAt = k => { const [nd, o] = loc(k); return nd.data[o]; };
+    while (hi > 0 && /\s/.test(chAt(hi))) hi--;
     if (bot(hi) <= limit + 1) return null;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (bot(mid) > limit + 1) hi = mid; else lo = mid + 1; }
     const [nd, o] = loc(lo);
@@ -279,6 +291,7 @@ const Editor = {
       const mg = this.mergeMoved(nc, moved);
       if (mg && cb === mg.from) cb = mg.to;
       nc.prepend(...moved);
+      Wrap.apply(nl.pg, nl.p);
       if (cb) { nc.focus(); setCaretAt(cb, co); }
       this.normalize(nc);
       this.reflow(nl, !!cb);
@@ -346,9 +359,9 @@ const Editor = {
       else this.insertText('    ');
       return;
     }
-    if (mod && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); Links.open(Sel.save(), l); return; }
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'h') { e.preventDefault(); document.execCommand('hiliteColor', false, HL_COLORS[0]); return; }
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); this.inlineCode(); return; }
+    if (mod && !e.shiftKey && e.code === 'KeyK') { e.preventDefault(); Links.open(Sel.save(), l); return; }
+    if (mod && e.shiftKey && e.code === 'KeyH') { e.preventDefault(); document.execCommand('hiliteColor', false, HL_COLORS[0]); return; }
+    if (mod && e.shiftKey && e.code === 'KeyC') { e.preventDefault(); this.inlineCode(); return; }
     // المحاذاة: Ctrl+R يمين، Ctrl+E وسط، Ctrl+L يسار (بتشتغل حتى مع الكيبورد العربي)
     const AL = { KeyR: 'right', KeyE: 'center', KeyL: 'left' };
     if (mod && !e.shiftKey && !e.altKey && AL[e.code]) { e.preventDefault(); this.align(AL[e.code]); this.updateStates(); return; }
@@ -405,8 +418,8 @@ const Editor = {
     const s = getSelection();
     if (s.rangeCount && l.c.contains(s.anchorNode)) return;
     l.c.focus();
-    if (!l.c.lastElementChild) l.c.innerHTML = '<p><br></p>';
-    const last = l.c.lastElementChild;
+    let last = [...l.c.children].reverse().find(x => !x.classList.contains('wrapx'));
+    if (!last) { last = el('<p><br></p>'); l.c.append(last); }
     setCaretAt(last, last.textContent.length);
   },
   insertBlock(l, node) {
@@ -664,28 +677,41 @@ const Editor = {
 /* ============ الملاحظات اللاصقة وصور الستيكر ============ */
 const Stickies = {
   COLORS: ['#fff1a1', '#ffd0dc', '#c8f0d4', '#cfe5ff', '#e2d4ff', '#ffd8ae'],
+  // ارتفاع تقريبي لما ما نقدر نقيس (مثلاً بالطباعة)
+  guessH(s) { return s.h || (s.kind === 'photo' ? s.w * .82 : s.kind === 'video' ? s.w * .5625 + 30 : 140); },
   renderAll(pg, p, live) {
     const layer = $('.stickies', pg);
     layer.innerHTML = '';
-    (p.stickies || []).forEach(s => layer.append(this.el(s, p, live)));
+    (p.stickies || []).forEach(s => layer.append(this.el(s, p, live, pg)));
   },
-  el(s, p, live) {
-    const photo = s.kind === 'photo';
-    const d = el(`<div class="sticky ${s.kind}" style="left:${s.x}px;top:${s.y}px;width:${s.w}px;--rot:${s.rot}deg;--sc:${s.color || '#fff1a1'}">
-      <div class="tape"></div>
+  el(s, p, live, pg) {
+    const photo = s.kind === 'photo', video = s.kind === 'video', wrap = s.wrap !== false;
+    const d = el(`<div class="sticky ${s.kind} ${wrap ? '' : 'over'}" data-sid="${s.id}" style="left:${s.x}px;top:${s.y}px;width:${s.w}px;--rot:${video ? 0 : s.rot}deg;--sc:${s.color || '#fff1a1'}">
+      ${video ? `<div class="v-bar">${ic('film')}<span>اسحب من هون</span></div><video data-blob="${s.blob}" ${live ? 'controls' : ''} preload="${live ? 'metadata' : 'none'}" playsinline></video>` : '<div class="tape"></div>'}
       ${photo ? `<img data-blob="${s.blob}" alt="" draggable="false">` : ''}
-      <div class="stx${photo ? ' cap' : ''}" ${live ? 'contenteditable="true"' : ''} spellcheck="false" ${photo ? 'data-ph="اكتب تعليقاً…"' : 'data-ph="ملاحظة…"'}>${s.text || ''}</div>
-      ${live ? `<button class="s-x" title="حذف">${ic('x')}</button>${photo ? '' : '<button class="s-c" title="تغيير اللون"></button>'}<div class="s-rz" title="تغيير الحجم"></div>` : ''}
+      ${video ? '' : `<div class="stx${photo ? ' cap' : ''}" ${live ? 'contenteditable="true"' : ''} spellcheck="false" dir="auto" ${photo ? 'data-ph="اكتب تعليقاً…"' : 'data-ph="ملاحظة…"'}>${s.text || ''}</div>`}
+      ${live ? `<button class="s-x" title="حذف">${ic('x')}</button>
+        <button class="s-w" title="${wrap ? 'النص حواليها — اضغط لتصير فوق النص' : 'فوق النص — اضغط ليلتف النص حواليها'}">${ic(wrap ? 'wrapon' : 'wrapoff')}</button>
+        ${photo || video ? '' : '<button class="s-c" title="تغيير اللون"></button>'}<div class="s-rz" title="تغيير الحجم"></div>` : ''}
     </div>`);
     if (!live) return d;
     const save = () => Editor.persist(p);
     const tx = $('.stx', d);
-    tx.addEventListener('input', () => { s.text = tx.innerHTML === '<br>' ? '' : tx.innerHTML; save(); });
-    tx.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData && e.clipboardData.getData('text/plain')) || ''; document.execCommand('insertText', false, t); });
+    if (tx) {
+      tx.addEventListener('input', () => { s.text = tx.innerHTML === '<br>' ? '' : tx.innerHTML; save(); });
+      tx.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData && e.clipboardData.getData('text/plain')) || ''; document.execCommand('insertText', false, t); });
+    }
+    // نقيس الارتفاع الحقيقي ونخزّنه (لالتفاف النص حتى بالطباعة)
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (!d.isConnected || d.classList.contains('drag')) return;
+      const h = d.offsetHeight;
+      if (h && Math.abs((s.h || 0) - h) > 2) { s.h = h; save(); Wrap.apply(pg, p); }
+    }).observe(d);
     d.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       const t = e.target;
-      if (t.closest('.s-x,.s-c')) return;
+      if (t.closest('.s-x,.s-c,.s-w')) return;
+      if (t.closest('video')) return; // أزرار الفيديو نفسه
       const rz = t.closest('.s-rz');
       const arr = p.stickies; const k = arr.indexOf(s);
       if (k > -1 && k < arr.length - 1) { arr.splice(k, 1); arr.push(s); d.parentElement.append(d); }
@@ -693,23 +719,38 @@ const Stickies = {
       e.preventDefault();
       const sx = e.clientX, sy = e.clientY, x0 = s.x, y0 = s.y, w0 = s.w, k2 = Reader.scale;
       try { d.setPointerCapture(e.pointerId); } catch { } d.classList.add('drag');
+      let raf = 0;
       const mv = ev => {
         const dx = (ev.clientX - sx) / k2, dy = (ev.clientY - sy) / k2;
-        if (rz) { s.w = Math.round(clamp(w0 + dx, 110, 540)); d.style.width = s.w + 'px'; }
+        if (rz) { s.w = Math.round(clamp(w0 + dx, video ? 180 : 110, 540)); d.style.width = s.w + 'px'; }
         else {
           s.x = Math.round(clamp(x0 + dx, -s.w + 60, PW - 60)); s.y = Math.round(clamp(y0 + dy, -30, PH - 60));
           d.style.left = s.x + 'px'; d.style.top = s.y + 'px';
         }
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; s.h = d.offsetHeight; Wrap.apply(pg, p); });
       };
-      const up = () => { d.removeEventListener('pointermove', mv); d.removeEventListener('pointerup', up); d.classList.remove('drag'); save(); };
+      const up = () => {
+        d.removeEventListener('pointermove', mv); d.removeEventListener('pointerup', up); d.classList.remove('drag');
+        s.h = d.offsetHeight; Wrap.apply(pg, p); save();
+        const l = Editor.liveOf(pg); if (l) Editor.reflow(l, false);
+      };
       d.addEventListener('pointermove', mv); d.addEventListener('pointerup', up);
     });
     $('.s-x', d).onclick = () => {
       const k = p.stickies.indexOf(s); if (k < 0) return;
-      p.stickies.splice(k, 1); d.remove(); save();
+      p.stickies.splice(k, 1); d.remove(); save(); Wrap.apply(pg, p);
       let undone = false;
-      Toast.show({ icon: 'trash', text: photo ? 'حُذفت الصورة' : 'حُذفت الملاحظة', timeout: 6000, actions: [{ label: 'تراجع', act: () => { undone = true; p.stickies.push(s); Reader.render(); save(); } }] });
+      Toast.show({ icon: 'trash', text: photo ? 'حُذفت الصورة' : video ? 'حُذف الفيديو' : 'حُذفت الملاحظة', timeout: 6000, actions: [{ label: 'تراجع', act: () => { undone = true; p.stickies.push(s); Reader.render(); save(); } }] });
       if (s.blob) setTimeout(() => { if (!undone) Media.del(s.blob); }, 6500);
+    };
+    $('.s-w', d).onclick = () => {
+      s.wrap = !(s.wrap !== false);
+      d.classList.toggle('over', !s.wrap);
+      $('.s-w', d).innerHTML = ic(s.wrap ? 'wrapon' : 'wrapoff');
+      $('.s-w', d).title = s.wrap ? 'النص حواليها — اضغط لتصير فوق النص' : 'فوق النص — اضغط ليلتف النص حواليها';
+      Wrap.apply(pg, p); save();
+      const l = Editor.liveOf(pg); if (l) Editor.reflow(l, false);
+      Toast.show({ icon: s.wrap ? 'wrapon' : 'wrapoff', text: s.wrap ? 'النص صار يلتف حواليها' : 'صارت فوق النص', timeout: 1800 });
     };
     const cbtn = $('.s-c', d);
     if (cbtn) cbtn.onclick = () => {
@@ -720,9 +761,10 @@ const Stickies = {
   },
   add(l, s) {
     (l.p.stickies = l.p.stickies || []).push(s);
-    const d = this.el(s, l.p, true);
+    const d = this.el(s, l.p, true, l.pg);
     $('.stickies', l.pg).append(d);
     Media.hydrate(d);
+    requestAnimationFrame(() => { s.h = d.offsetHeight; Wrap.apply(l.pg, l.p); Editor.reflow(l, false); });
     Editor.persist(l.p);
     return d;
   },
@@ -743,6 +785,58 @@ const Stickies = {
       this.add(l, { id: uid(), kind: 'photo', blob: id, w, x: Math.round(clamp(bx + k * 28, -60, PW - w + 40)), y: Math.round(clamp(by + k * 34, 0, PH - 200)), rot: +(Math.random() * 8 - 4).toFixed(1), text: '' });
       k++;
     }
+  },
+  addVideo(l, blobId, pt) {
+    const w = 300;
+    return this.add(l, { id: uid(), kind: 'video', blob: blobId, w, x: Math.round(pt ? clamp(pt.x - w / 2, 20, PW - w - 20) : PW - w - 60), y: Math.round(pt ? clamp(pt.y - 40, 70, PH - 260) : 120), rot: 0 });
+  },
+};
+
+/* ============ التفاف النص حول الملاحظات والصور والفيديو ============
+   شكل غير مرئي على طرف الصفحة (float + shape-outside) والنص بيلف حواليه.
+   كل عنصر بينحسب على الطرف الأقرب إله، مثل «التفاف مربّع» بالوورد. */
+const Wrap = {
+  apply(pg, p) {
+    const c = pg && $('.content', pg);
+    if (!c) return;
+    $$(':scope > .wrapx', c).forEach(x => x.remove());
+    const list = (p.stickies || []).filter(s => s.wrap !== false);
+    if (!list.length || !c.isConnected) return;
+    const cs = getComputedStyle(c);
+    const cl = parseFloat(cs.left) || 0, ct = parseFloat(cs.top) || 0;
+    const cw = PW - cl - (parseFloat(cs.right) || 0), ch = parseFloat(cs.height) || 700;
+    const lh = parseFloat(cs.lineHeight) || 32;
+    const sides = { left: [], right: [] };
+    list.forEach(s => {
+      const h = Stickies.guessH(s);
+      const x0 = s.x - cl, x1 = s.x + s.w - cl, y0 = s.y - ct - 8, y1 = s.y + h - ct + 8;
+      if (x1 <= 4 || x0 >= cw - 4 || y1 <= 0 || y0 >= ch) return;
+      const top = Math.max(0, Math.floor(y0 / lh) * lh), bottom = Math.min(ch, Math.ceil(y1 / lh) * lh);
+      if ((x0 + x1) / 2 < cw / 2) sides.left.push({ top, bottom, w: clamp(x1 + 14, 0, cw - 90) });
+      else sides.right.push({ top, bottom, w: clamp(cw - x0 + 14, 0, cw - 90) });
+    });
+    const out = [];
+    for (const side of ['left', 'right']) {
+      const R = sides[side].sort((a, b) => a.top - b.top), M = [];
+      R.forEach(r => { const last = M[M.length - 1]; if (last && r.top <= last.bottom) { last.bottom = Math.max(last.bottom, r.bottom); last.w = Math.max(last.w, r.w); } else M.push({ ...r }); });
+      if (!M.length) continue;
+      const W = Math.max(...M.map(r => r.w)), H = Math.max(...M.map(r => r.bottom));
+      const pts = [];
+      if (side === 'left') {
+        pts.push('0px 0px');
+        M.forEach(r => pts.push(`0px ${r.top}px`, `${r.w}px ${r.top}px`, `${r.w}px ${r.bottom}px`, `0px ${r.bottom}px`));
+        pts.push(`0px ${H}px`);
+      } else {
+        pts.push(`${W}px 0px`);
+        M.forEach(r => pts.push(`${W}px ${r.top}px`, `${W - r.w}px ${r.top}px`, `${W - r.w}px ${r.bottom}px`, `${W}px ${r.bottom}px`));
+        pts.push(`${W}px ${H}px`);
+      }
+      const f = document.createElement('div');
+      f.className = 'wrapx'; f.contentEditable = 'false';
+      f.style.cssText = `float:${side};width:${W}px;height:${H}px;shape-outside:polygon(${pts.join(',')});margin:0`;
+      out.push(f);
+    }
+    c.prepend(...out);
   },
 };
 
@@ -819,6 +913,7 @@ const Ctx = {
       { icon: 'page', label: 'رابط لصفحة أو كتاب', act: doAt(() => Links.open(Sel.save(), l, 'page')) },
       { icon: 'mic', label: hasSel ? 'تسجيل صوت للكلمة المحددة' : 'تسجيل صوت للصفحة', act: doAt(() => hasSel ? Voice.attachToSelection(Sel.save(), l) : Voice.attachToPage(l, e)) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
+      { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
       ...(hasSel ? [{ icon: 'tape', label: 'اجعله جواباً لسؤال مراجعة', act: doAt(() => Study.mark(Sel.save(), l)) }] : []),
       ...(e.target.closest('.ans') ? [{ icon: 'x', label: 'إلغاء سؤال المراجعة', act: () => Study.unmark(e.target.closest('.ans'), l) }] : []),
       '-', { head: `الصفحة ${l.i + 1}` },

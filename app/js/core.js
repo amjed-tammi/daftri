@@ -59,6 +59,11 @@ const ICONS = {
   all: '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>',
   pin: '<path d="M9 3h6l-1 6 3.5 3.5h-11L10 9zM12 12.5V21"/>',
   web: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/><path d="M12 7.5l3.2 1.3 1.3 3.2-1.3 3.2-3.2 1.3-3.2-1.3L7.5 12l1.3-3.2z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+  exam: '<path d="M9 3h6v3H9z"/><path d="M16 4.5h2a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1h2"/><path d="m8.5 12.5 1.5 1.5 3-3M14.5 13h2M8.5 17.5h8"/>',
+  wrapon: '<rect x="4" y="8" width="7" height="7" rx="1"/><path d="M4 4h16M14 9h6M14 13h6M4 19h16"/>',
+  wrapoff: '<rect x="8" y="7" width="8" height="9" rx="1"/><path d="M4 4h16M4 11h3M17 11h3M4 19h16"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.2-2.5 3.8M12 17.2v.1"/>',
   left: '<path d="m15 5-7 7 7 7"/>',
   right: '<path d="m9 5 7 7-7 7"/>',
@@ -105,20 +110,34 @@ const ICONS = {
   focus: '<circle cx="12" cy="12" r="3"/><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/>',
   journal: '<path d="M5 4a1 1 0 0 1 1-1h13v16H6a1 1 0 0 0-1 1z"/><path d="M5 20a1 1 0 0 0 1 1h13M9 8h6M9 12h4"/>',
   music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="8.5" cy="14.5" r=".9"/><circle cx="12" cy="14.5" r=".9"/><circle cx="15.5" cy="14.5" r=".9"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 11h18"/>',
+  attach: '<path d="M20 11.5 12.2 19.3a5 5 0 0 1-7.1-7.1l8-8a3.4 3.4 0 0 1 4.8 4.8l-8 8a1.7 1.7 0 0 1-2.4-2.4l7.3-7.3"/>',
   font: '<path d="M4 20 9.5 5h1L16 20M6.2 14.5h7.6M17 20l2.5-7 2.5 7M18 18h3"/>',
 };
 const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
 /* ============ قاعدة البيانات (IndexedDB) ============ */
+const NO_SUBJECT = 'none'; // المادة الافتراضية «بدون مادة»
 const DB = {
   _p: null,
   open() {
     if (this._p) return this._p;
     this._p = new Promise((res, rej) => {
-      const r = indexedDB.open('daftari', 3);
-      r.onupgradeneeded = () => {
+      const r = indexedDB.open('daftari', 5);
+      r.onupgradeneeded = e => {
         const d = r.result;
-        for (const s of ['books', 'pages', 'blobs', 'trash', 'cards', 'journal', 'links']) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s, { keyPath: 'id' });
+        for (const s of ['books', 'pages', 'blobs', 'trash', 'cards', 'journal', 'links', 'exams', 'subjects', 'files', 'plans']) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s, { keyPath: 'id' });
+        // نسخة 5: المواد فوق الكتب. كل كتاب قديم بيروح لـ«بدون مادة» (ما بينحذف ولا شي)
+        if (e.oldVersion < 5) {
+          const tx = r.transaction;
+          tx.objectStore('subjects').put({ id: NO_SUBJECT, name: 'بدون مادة', color: '#3a4a78', created: Date.now(), sys: true });
+          tx.objectStore('books').openCursor().onsuccess = ev => {
+            const c = ev.target.result; if (!c) return;
+            if (!c.value.subjectId) { c.value.subjectId = NO_SUBJECT; c.update(c.value); }
+            c.continue();
+          };
+        }
       };
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
@@ -248,6 +267,20 @@ const Sky = {
 /* ============ الأصوات (بدون ملفات) ============ */
 const Sound = {
   ctx: null,
+  // صوت الورقة بنحضّره مرة وحدة بس (مش مع كل تقليبة)
+  flipBuf() {
+    if (this._flip) return this._flip;
+    const c = this.ac(), len = .32;
+    const buf = c.createBuffer(1, Math.round(c.sampleRate * len), c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) { const k = i / d.length; d[i] = (Math.random() * 2 - 1) * Math.pow(Math.sin(Math.PI * k), 1.6) * (0.6 + 0.4 * Math.sin(k * 40)); }
+    return (this._flip = buf);
+  },
+  // تجهيز الصوت بوقت فاضي: أول إنشاء لـ AudioContext ممكن ياخذ وقت، فما بنخليه يأخّر أول تقليبة
+  warm() {
+    if (this.ctx || localStorage.getItem('flipSound') === '0') return;
+    (window.requestIdleCallback || (f => setTimeout(f, 200)))(() => { try { this.flipBuf(); } catch { } }, { timeout: 1500 });
+  },
   ac() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; },
   chime(soft = false) {
     try {
@@ -266,11 +299,8 @@ const Sound = {
   flip() {
     if (localStorage.getItem('flipSound') === '0') return;
     try {
-      const c = this.ac(), t = c.currentTime, len = .32;
-      const buf = c.createBuffer(1, Math.round(c.sampleRate * len), c.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) { const k = i / d.length; d[i] = (Math.random() * 2 - 1) * Math.pow(Math.sin(Math.PI * k), 1.6) * (0.6 + 0.4 * Math.sin(k * 40)); }
-      const src = c.createBufferSource(); src.buffer = buf;
+      const c = this.ac(), t = c.currentTime;
+      const src = c.createBufferSource(); src.buffer = this.flipBuf();
       const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = .7;
       const gn = c.createGain(); gn.gain.value = .07;
       src.connect(bp).connect(gn).connect(c.destination); src.start(t);
@@ -280,10 +310,10 @@ const Sound = {
 
 /* ============ الإشعارات الصغيرة ============ */
 const Toast = {
-  show({ icon = 'star', title = '', text = '', actions = [], timeout = 4500, cls = '' } = {}) {
+  show({ icon = 'star', emoji = '', title = '', text = '', actions = [], timeout = 4500, cls = '' } = {}) {
     const t = el(`<div class="toast ${cls}" role="status">
-      <div class="t-ic">${ic(icon)}</div>
-      <div class="t-body">${title ? `<b>${esc(title)}</b>` : ''}${text ? `<span>${esc(text)}</span>` : ''}</div>
+      <div class="t-ic">${emoji ? `<span class="t-emoji">${esc(emoji)}</span>` : ic(icon)}</div>
+      <div class="t-body">${title ? `<b dir="auto">${esc(title)}</b>` : ''}${text ? `<span dir="auto">${esc(text)}</span>` : ''}</div>
       <div class="t-acts"></div></div>`);
     const close = () => { t.classList.remove('in'); setTimeout(() => t.remove(), 300); clearTimeout(tm); };
     actions.forEach(a => {
@@ -293,6 +323,9 @@ const Toast = {
     });
     if (!actions.length) t.onclick = close;
     $('#toasts').append(t);
+    // ما بنخلي الرسائل تتراكم وتغطي الشاشة: أقصى شي 3 (الأقدم بيروح)
+    const all = $$('#toasts .toast:not(.gone)');
+    all.slice(0, Math.max(0, all.length - 3)).forEach(o => { o.classList.add('gone'); o.classList.remove('in'); setTimeout(() => o.remove(), 300); });
     requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('in')));
     const tm = timeout ? setTimeout(() => { close(); }, timeout) : 0;
     return close;
@@ -315,6 +348,7 @@ const Pop = {
     if (y + ph > innerHeight - 8) y = Math.max(8, (place === 'point' ? r.top - ph : r.top - ph - gap));
     if (y < 8) y = Math.min(innerHeight - ph - 8, r.bottom + gap);
     x = clamp(x, 8, innerWidth - pw - 8);
+    y = clamp(y, 8, Math.max(8, innerHeight - ph - 8)); // ما بتطلع برا الشاشة أبداً حتى لو الزر مخفي
     p.style.left = x + 'px'; p.style.top = y + 'px';
     this.cur = p;
     this._out = e => { if (this.cur && !this.cur.contains(e.target)) this.close(); };

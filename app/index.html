@@ -21,7 +21,10 @@
       <div><h1>دفتري</h1><p class="tag">ورق، حبر، وليل هادئ للكتابة والدراسة</p></div>
     </div>
     <div class="lib-actions">
+      <button class="btn ghost" id="btnCal" title="تقويم الدراسة" data-ic="calendar"><span>التقويم</span><b class="badge" id="calBadge" hidden></b></button>
+      <button class="btn ghost" id="btnSubj" title="مادة جديدة: بتجمع كتبها وملفات الـPDF تبعها" data-ic="folder"><span>مادة جديدة</span></button>
       <button class="btn primary" id="btnNew" data-ic="plus">كتاب جديد</button>
+      <button class="ib" id="btnSettings" title="الإعدادات" data-ic="gear"></button>
       <button class="ib" id="btnLibMore" title="المزيد" data-ic="more"></button>
     </div>
   </header>
@@ -44,20 +47,23 @@
       <button class="ib" id="tbBack" title="رجوع للمكتبة" data-ic="books"></button>
       <div class="tb-title"><b id="tbTitle"></b><span id="tbSeries"></span></div>
     </div>
-    <div class="tb-group">
-      <button class="tbtn" id="tbIndex" title="الفهرس" data-ic="list"><span>الفهرس</span></button>
-      <button class="tbtn" id="tbWeb" title="شبكة الأفكار (Ctrl+G)" data-ic="web"><span>الشبكة</span></button>
-      <button class="tbtn" id="tbReview" title="المراجعة ووضع الامتحان" data-ic="cards"><span>مراجعة</span><b class="badge" id="rvBadge" hidden></b></button>
+    <div class="tb-group tb-tools">
+      <!-- كتابة -->
+      <button class="tbtn tb-main" id="tbInsert" title="إدراج: جدول، كود، صور، فيديو، صوت…" data-ic="plus"><span>إدراج</span></button>
+      <span class="tb-sep"></span>
+      <!-- دراسة -->
+      <div class="tb-cluster" role="group" aria-label="الدراسة">
+        <button class="tbtn" id="tbReview" title="المراجعة: أسئلة بترجعلك لحد ما تحفظها" data-ic="cards"><span>مراجعة</span><b class="badge" id="rvBadge" hidden></b></button>
+        <button class="tbtn" id="tbExam" title="امتحانات هالكتاب" data-ic="exam"><span>امتحانات</span></button>
+        <button class="tbtn" id="tbIndex" title="الفهرس" data-ic="list"><span>الفهرس</span></button>
+        <button class="tbtn" id="tbWeb" title="شبكة الأفكار (Ctrl+G)" data-ic="web"><span>الشبكة</span></button>
+      </div>
+      <span class="tb-sep"></span>
+      <!-- أدوات سريعة -->
       <button class="ib" id="tbSearch" title="بحث (Ctrl+F)" data-ic="search"></button>
       <button class="ib" id="tbFocus" title="وضع التركيز (Ctrl+Shift+F)" data-ic="focus"></button>
-      <span class="tb-sep"></span>
-      <button class="tbtn" id="tbInsert" data-ic="plus"><span>إدراج</span></button>
-      <button class="tbtn" id="tbPaper" data-ic="sliders"><span>الورق</span></button>
-      <button class="ib" id="tbMic" title="تسجيل صوت للصفحة" data-ic="mic"></button>
-      <button class="ib" id="tbEdit" title="الغلاف ومعلومات الكتاب" data-ic="edit"></button>
-      <button class="tbtn" id="tbPdf" title="تصدير PDF (Ctrl+P)" data-ic="pdf"><span>PDF</span></button>
-      <button class="ib" id="tbFull" title="ملء الشاشة" data-ic="full"></button>
-      <button class="ib" id="tbHelp" title="الجولة التعريفية" data-ic="help"></button>
+      <button class="ib" id="tbPaper" title="إعدادات هالكتاب: الورق والخط والموسيقى" data-ic="sliders"></button>
+      <button class="ib" id="tbMore" title="المزيد: PDF، الغلاف، تسجيل صوت، كل الأدوات (Ctrl+/)" data-ic="more"></button>
     </div>
   </div>
   <div class="peek peek-top" aria-hidden="true"></div>
@@ -75,7 +81,7 @@
 <div id="rope"></div>
 <div class="corner">
   <button id="btnNight" class="ib floating" title="التذكيرات والمؤقت" data-ic="bell"></button>
-  <button id="btnSound" class="ib floating" title="أصوات الجو" data-ic="music"></button>
+  <button id="btnSound" class="ib floating" title="موسيقى الخلفية" data-ic="music"></button>
   <span id="streak" class="streak" hidden></span>
 </div>
 <div id="toasts" aria-live="polite"></div>
@@ -89,11 +95,17 @@
 <script src="js/editor.js"></script>
 <script src="js/extras.js"></script>
 <script src="js/fonts.js"></script>
-<script src="js/ambience.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/music.js"></script>
+<script src="js/exams.js"></script>
+<script src="js/share.js"></script>
 <script src="js/study.js"></script>
+<script src="js/subjects.js"></script>
+<script src="js/calendar.js"></script>
 <script src="js/finder.js"></script>
 <script src="js/ideaweb.js"></script>
 <script src="js/tour.js"></script>
+<script src="js/palette.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

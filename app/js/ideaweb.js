@@ -286,7 +286,10 @@ const IdeaWeb = {
     const stage = $('.iw-stage', ov), box = $('.iw-nodes', ov), temp = $('.iw-temp', ov);
     let pan = null, thread = null, clickT = 0;
     const close = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 280); document.removeEventListener('keydown', key, true); };
-    const key = e => { if (e.key === 'Escape' && !Pop.cur && !$('.modal-back')) { e.stopPropagation(); close(); } };
+    const key = e => {
+      if (!ov.isConnected) { document.removeEventListener('keydown', key, true); return; } // الشاشة انسكّرت بطريقة ثانية
+      if (e.key === 'Escape' && !Pop.cur && !$('.modal-back')) { e.stopPropagation(); close(); }
+    };
     document.addEventListener('keydown', key, true);
     $('[data-a=close]', ov).onclick = close;
     stage.addEventListener('pointerdown', e => {

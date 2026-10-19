@@ -1,11 +1,12 @@
 'use strict';
 /* ============ التشغيل ============ */
 (async function main() {
+  Settings.load();
   Sky.init();
   Player.init();
   Editor.init();
   Bars.init();
-  Ambience.init();
+  Music.init();
   Study.init();
   Rope.init();
   Reminders.init();
@@ -13,25 +14,25 @@
   // أيقونات الأزرار
   $$('[data-ic]').forEach(b => b.insertAdjacentHTML('afterbegin', ic(b.dataset.ic)));
 
+  // عربي وإنجليزي بكل مكان: أي خانة كتابة بتاخذ اتجاه اللغة اللي بتكتب فيها
+  const autoDir = root => $$('input:not([type]), input[type=text], input[type=search], textarea', root).forEach(i => { if (!i.hasAttribute('dir')) i.dir = 'auto'; });
+  autoDir(document);
+  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) autoDir(n.matches && n.matches('input,textarea') ? n.parentNode : n); }))).observe(document.body, { childList: true, subtree: true });
+
   // المكتبة
   $('#btnNew').onclick = () => Library.openForm();
+  $('#btnSubj').onclick = () => Subjects.form();
+  $('#btnCal').onclick = () => Cal.open();
+  // قائمة «⋯» بالمكتبة: مرتبة بمجموعات، وكل شي من مصدر واحد (Cmd)
   $('#btnLibMore').onclick = async e => {
     const t = e.currentTarget, n = await Trash.count();
-    Menu.open(t, [
-      { icon: 'help', label: 'الجولة التعريفية', act: () => Tour.start('lib') },
-      { icon: 'search', label: 'بحث بكل الكتب', hint: 'Ctrl+F', act: () => Finder.open() },
-      { icon: 'journal', label: 'يومياتي', act: () => Study.journalPanel() },
-      { icon: 'trash', label: 'سلة المحذوفات' + (n ? ` (${n})` : ''), act: () => Trash.panel() },
-      '-',
-      { icon: 'upload', label: 'استعادة نسخة احتياطية', act: () => Backup.importFile() },
-      { icon: 'download', label: 'حفظ نسخة احتياطية لكل المكتبة', act: () => Backup.exportBooks() },
-      '-',
-      { icon: 'bell', label: 'التذكيرات والمؤقت', act: () => Reminders.panel($('#btnNight')) },
-      { icon: 'music', label: 'أصوات الجو', act: () => Ambience.panel($('#btnSound')) },
-    ]);
+    const items = Cmd.menu(['search', 'cal', 'journal', '-', 'subject', 'pdfUp', '-', 'open', 'backup', 'restore', 'trash', '-', 'tour']);
+    const tr = items.find(x => x.label === 'سلة المحذوفات'); if (tr && n) tr.label += ` (${n})`;
+    Menu.open(t, [{ icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() }, '-', ...items]);
   };
   $('#btnNight').onclick = e => Reminders.panel(e.currentTarget);
-  $('#btnSound').onclick = e => Ambience.panel(e.currentTarget);
+  $('#btnSound').onclick = e => Music.panel(e.currentTarget);
+  $('#btnSettings').onclick = () => Settings.panel();
   $('#streak').onclick = () => Study.journalPanel();
 
   // شريط الكتاب العلوي
@@ -40,15 +41,20 @@
   $('#tbBack').onclick = () => Reader.close();
   $('#tbIndex').onclick = e => Finder.index(e.currentTarget);
   $('#tbWeb').onclick = () => IdeaWeb.open();
+  $('#tbExam').onclick = () => Exams.panel();
   $('#tbReview').onclick = e => Study.reviewMenu(e.currentTarget);
   $('#tbSearch').onclick = () => Finder.open();
   $('#tbFocus').onclick = () => Study.setFocus(!Study.focus);
-  $('#tbEdit').onclick = () => Library.openForm(Reader.book);
   $('#tbPaper').onclick = e => { Reader.paperPanel(e.currentTarget); fromTop(); };
-  $('#tbPdf').onclick = () => Exporter.pdf();
-  $('#tbHelp').onclick = () => Tour.start('book');
-  $('#tbFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
-  $('#tbMic').onclick = e => { const l = curLive(); if (!l) { Toast.show({ icon: 'page', text: 'افتح الكتاب أولاً' }); return; } Voice.attachToPage(l); };
+  // «⋯»: الشغلات اللي ما بنحتاجها كل دقيقة، حتى يضل الشريط خفيف
+  $('#tbMore').onclick = e => {
+    Menu.open(e.currentTarget, [
+      { icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() },
+      '-',
+      ...Cmd.menu(['pdf', 'share', 'edit', 'mic', 'addpage', '-', 'pdfs', 'planBook', 'cal', 'journal', '-', 'full', 'tour']),
+    ]);
+    fromTop();
+  };
   $('#tbInsert').onclick = e => {
     const l = curLive();
     if (!l) { Toast.show({ icon: 'page', text: 'افتح الكتاب أولاً (اسحب الغلاف)' }); return; }
@@ -68,6 +74,7 @@
       { icon: 'page', label: 'رابط لصفحة أو كتاب', act: at(() => Links.open(Sel.save(), l, 'page')) },
       { icon: 'mic', label: 'تسجيل صوت للصفحة', act: () => Voice.attachToPage(l) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
+      { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
       '-',
       { icon: 'addpage', label: 'إضافة صفحة بعد هذه', act: () => Reader.insertPageAfter(l.i) },
     ]);
@@ -89,9 +96,10 @@
   // لوحة المفاتيح
   document.addEventListener('keydown', e => {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); Editor.flushAll(); Toast.show({ icon: 'check', text: 'محفوظ ✓ (الحفظ تلقائي دائماً)', timeout: 1500 }); return; }
-    if (mod && !e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); if (!$('.modal-back')) Finder.open(); return; }
-    if (mod && e.key.toLowerCase() === 'p') {
+    if (mod && e.code === 'Slash') { e.preventDefault(); Palette.open(); return; }
+    if (mod && e.code === 'KeyS') { e.preventDefault(); Editor.flushAll(); Toast.show({ icon: 'check', text: 'محفوظ ✓ (الحفظ تلقائي دائماً)', timeout: 1500 }); return; }
+    if (mod && !e.shiftKey && e.code === 'KeyF') { e.preventDefault(); if (!$('.modal-back')) Finder.open(); return; }
+    if (mod && e.code === 'KeyP') {
       e.preventDefault();
       if (!$('#reader').hidden && Reader.book) Exporter.pdf();
       else Toast.show({ icon: 'pdf', text: 'افتح الكتاب اللي بدك تصدّره، بعدين اضغط PDF أو Ctrl+P', timeout: 3500 });
@@ -99,7 +107,7 @@
     }
     if ($('#reader').hidden || !Reader.book) return;
     if (mod && e.code === 'KeyG') { e.preventDefault(); IdeaWeb.open(); return; }
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); Study.setFocus(!Study.focus); return; }
+    if (mod && e.shiftKey && e.code === 'KeyF') { e.preventDefault(); Study.setFocus(!Study.focus); return; }
     if (e.key === 'Escape' && Study.focus && !Pop.cur && !$('.modal-back')) { Study.setFocus(false); return; }
     if ($('.modal-back')) return;
     const editing = document.activeElement && (document.activeElement.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
@@ -128,5 +136,10 @@
   await IdeaWeb.load().catch(() => {});
   await Library.load();
   Trash.autoPurge().catch(() => {});
-  if (!Library.books.length || Tour.willRun('lib')) Tour.maybe('lib'); // جولة الترحيب أول مرة
+  Share.wireDrop();
+  Share.inbox().catch(e => console.warn(e));
+  Tour.maybe('lib'); // جولة الترحيب أول مرة، أو «شوف الجديد» بعد كل إضافة
+  setTimeout(() => { if ($('#reader').hidden) Cal.nudge(); }, 1800); // «مطلوب اليوم» مرة باليوم
+  performance.mark('daftari-booted');
+  document.body.dataset.booted = '1';
 })();

@@ -41,11 +41,19 @@ function ago(t) {
 }
 
 const Library = {
-  books: [],
+  books: [], subjects: [], files: [],
+  cur: null, // المادة المفتوحة (null = الصفحة الرئيسية: المواد أولاً)
   async load() {
-    this.books = (await DB.all('books')) || [];
+    const [books, subjects, files] = await Promise.all([DB.all('books'), DB.all('subjects'), DB.all('files'), Cal.load()]);
+    this.books = books || []; this.files = files || [];
+    this.subjects = (subjects || []).filter(x => !x.sys).sort((a, b) => a.created - b.created);
     this.render();
   },
+  // مادة الكتاب (أو «بدون مادة» إذا ما إله مادة أو مادته انحذفت/جاي من جهاز ثاني)
+  sid(x) { const s = x && x.subjectId; return s && this.subjects.some(o => o.id === s) ? s : NO_SUBJECT; },
+  subject(id) { return this.subjects.find(s => s.id === id) || null; },
+  subjectName(id) { const s = this.subject(id); return s ? s.name : 'بدون مادة'; },
+  subjectOptions(sel) { return [`<option value="${NO_SUBJECT}">بدون مادة</option>`, ...this.subjects.map(s => `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${esc(s.name)}</option>`)].join(''); },
   seriesNames() {
     const m = new Map();
     this.books.forEach(b => { if (b.series && b.series.name) m.set(normTitle(b.series.name), b.series.name); });
@@ -59,18 +67,32 @@ const Library = {
   render() {
     const box = $('#shelves');
     box.innerHTML = '';
-    if (!this.books.length) {
+    Cal.badge();
+    if (this.cur && !this.subject(this.cur)) this.cur = null;
+    if (!this.books.length && !this.subjects.length) {
       const e = el(`<div class="empty">
         <div class="empty-book">${coverHTML({ title: 'كتابك الأول', cover: { color: '#1d2b53' } })}</div>
         <h2>المكتبة فاضية… والليل طويل</h2>
-        <p>أنشئ أول كتاب، اختر غلافه وورقه، وابدأ الكتابة.</p>
-        <button class="btn primary lg">${ic('plus')} أنشئ أول كتاب</button></div>`);
-      $('button', e).onclick = () => this.openForm();
+        <p>أنشئ أول كتاب، اختر غلافه وورقه، وابدأ الكتابة. أو رتّب دراستك بمواد (رياضيات، فيزياء…) وحط كتب كل مادة جوّاها.</p>
+        <div class="row"><button class="btn primary lg" data-a="book">${ic('plus')} أنشئ أول كتاب</button><button class="btn ghost lg" data-a="subj">${ic('folder')} ابدأ بمادة</button></div></div>`);
+      $('[data-a=book]', e).onclick = () => this.openForm();
+      $('[data-a=subj]', e).onclick = () => Subjects.form();
       box.append(e);
+      Files.shelf(box, NO_SUBJECT);
       return;
     }
+    const strip = Cal.strip(); if (strip) box.append(strip);
+    const sid = this.cur || NO_SUBJECT;
+    if (this.cur) box.append(Subjects.head(this.subject(this.cur)));
+    else if (this.subjects.length) box.append(Subjects.grid());
+    const list = this.books.filter(b => this.sid(b) === sid);
+    if (this.cur && !list.length) {
+      const e = el(`<div class="subj-empty"><p>ما في كتب بهالمادة لسا. ضيف دفتر للمحاضرات، أو ارفع ملف PDF.</p><button class="btn primary">${ic('plus')} كتاب جديد بهالمادة</button></div>`);
+      $('button', e).onclick = () => this.openForm();
+      box.append(e);
+    }
     const groups = new Map(); const solo = [];
-    for (const b of this.books) {
+    for (const b of list) {
       if (b.series && b.series.name) {
         const k = normTitle(b.series.name);
         if (!groups.has(k)) groups.set(k, { name: b.series.name, books: [] });
@@ -84,7 +106,8 @@ const Library = {
     };
     [...groups.values()].sort((a, b) => Math.max(...b.books.map(x => x.updated)) - Math.max(...a.books.map(x => x.updated)))
       .forEach(g => shelf('سلسلة · ' + g.name, g.books.length + ' أجزاء', g.books.sort((a, b) => a.series.part - b.series.part), true));
-    if (solo.length) shelf('كتبي', solo.length + ' كتاب', solo.sort((a, b) => b.updated - a.updated), false);
+    if (solo.length) shelf(this.cur ? 'كتب المادة' : this.subjects.length ? 'كتب بدون مادة' : 'كتبي', solo.length + ' كتاب', solo.sort((a, b) => b.updated - a.updated), false);
+    Files.shelf(box, sid);
     Media.hydrate(box);
     Study.decorateLibrary();
   },
@@ -101,7 +124,10 @@ const Library = {
       Menu.open(e.currentTarget, [
         { icon: 'open', label: 'فتح', act: () => Reader.open(b.id) },
         { icon: 'edit', label: 'تعديل الغلاف والمعلومات', act: () => this.openForm(b) },
+        { icon: 'share', label: 'مشاركة الكتاب (.daftar)', act: () => Share.exportBook(b.id) },
         { icon: 'download', label: 'حفظ نسخة احتياطية', act: () => Backup.exportBooks([b.id]) },
+        { icon: 'attach', label: 'ملفات PDF لهالكتاب', act: () => Files.panel({ bookId: b.id }) },
+        { icon: 'calendar', label: 'خطّط لهالكتاب بالتقويم', act: () => Cal.open({ bookId: b.id }) },
         '-',
         { icon: 'trash', label: 'حذف الكتاب', danger: true, act: () => this.remove(b) },
       ]);
@@ -115,9 +141,10 @@ const Library = {
   openForm(book = null) {
     const isEdit = !!book;
     const d = book ? JSON.parse(JSON.stringify(book)) : {
-      title: '', author: '', dir: 'rtl', cover: { color: COVER_COLORS[0][0], image: null },
-      paper: { ...PAPER_DEFAULT }, series: null,
+      title: '', author: '', dir: Settings.d.dir, cover: { color: COVER_COLORS[0][0], image: null },
+      paper: Settings.newPaper(), series: null, music: { track: 'default', auto: null }, subjectId: this.cur || NO_SUBJECT,
     };
+    d.paper = { ...Settings.newPaper(), ...(d.paper || {}) };
     let newImage = null; // ملف صورة غلاف جديد
     let imgUrl = null;
     const names = this.seriesNames();
@@ -127,6 +154,7 @@ const Library = {
         <h2>${isEdit ? 'تعديل الكتاب' : 'كتاب جديد'}</h2>
         <label class="fld"><span>عنوان الكتاب</span><input name="title" maxlength="80" required placeholder="مثلاً: دفتر JavaScript"><em class="err"></em></label>
         <label class="fld"><span>المؤلف <small>(اختياري)</small></span><input name="author" maxlength="60"></label>
+        <label class="fld"><span>${ic('folder')} المادة</span><select name="subject">${this.subjectOptions(book ? this.sid(book) : (this.cur || NO_SUBJECT))}</select></label>
         <div class="fld"><span>اتجاه الكتاب</span>
           <div class="seg" data-k="dir">
             <button type="button" data-v="rtl">يفتح من اليمين <small>عربي</small></button>
@@ -137,10 +165,11 @@ const Library = {
             <button type="button" class="btn ghost sm" data-a="img">${ic('image')} صورة من جهازك</button>
             <button type="button" class="btn ghost sm" data-a="noimg" hidden>${ic('x')} إزالة الصورة</button>
           </div></div>
-        <details class="more-opts" ${isEdit ? '' : ''}>
-          <summary>الورق والسلسلة</summary>
-          ${isEdit ? '' : `<div class="fld"><span>نوع الورق</span><div class="seg wrap" data-k="style">${PAPER_STYLES.map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join('')}</div></div>
-          <div class="fld"><span>لون الورق</span><div class="swatches">${PAPER_TONES.map(([v, n, c]) => `<button type="button" class="sw tone" data-tone="${v}" title="${n}" style="--c:${c}"></button>`).join('')}</div></div>`}
+        <details class="more-opts">
+          <summary>إعدادات الكتاب: الورق، الخط، الموسيقى، السلسلة</summary>
+          <div class="bf-paper"></div>
+          <div class="fld"><span>${ic('music')} موسيقى الكتاب</span><select class="inp" name="music">${Settings.musicOptions((d.music && d.music.track) || 'default')}</select></div>
+          <label class="chk"><input type="checkbox" name="musicAuto" ${((d.music && d.music.auto != null) ? d.music.auto : Settings.d.music.auto) ? 'checked' : ''}> <span>شغّلها لحالها لما أفتح الكتاب</span></label>
           <label class="chk"><input type="checkbox" name="inSeries"> <span>هذا الكتاب جزء من سلسلة</span></label>
           <div class="series-f" hidden>
             <label class="fld"><span>اسم السلسلة</span><input name="sname" list="snames" maxlength="60" placeholder="مثلاً: رحلتي في البرمجة"><datalist id="snames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
@@ -171,10 +200,9 @@ const Library = {
     };
     f.addEventListener('click', async e => {
       const b = e.target.closest('button'); if (!b) return;
+      if (b.closest('.paperui')) return;
       if (b.closest('.seg[data-k=dir]')) d.dir = b.dataset.v;
-      else if (b.closest('.seg[data-k=style]')) d.paper.style = b.dataset.v;
       else if (b.dataset.c) { d.cover.color = b.dataset.c; d.cover.image = null; newImage = null; }
-      else if (b.dataset.tone) { d.paper.tone = b.dataset.tone; fixInk(d.paper); }
       else if (b.dataset.a === 'img') {
         const file = await pickFile('image/*'); if (!file) return;
         newImage = await Media.downscale(file, 1400);
@@ -222,13 +250,19 @@ const Library = {
       const oldImg = book && book.cover.image;
       if (oldImg && oldImg !== coverImage) Media.del(oldImg);
       if (book) {
-        Object.assign(book, { title, author: F.author.value.trim(), dir: d.dir, cover: { color: d.cover.color, image: coverImage }, series, updated: Date.now() });
+        const subjectId = F.subject.value;
+        if (this.sid(book) !== subjectId) {
+          // ملفات الكتاب بتنتقل معه للمادة الجديدة
+          const fs = this.files.filter(x => x.bookId === book.id).map(x => ({ ...x, subjectId }));
+          if (fs.length) await DB.putMany('files', fs);
+        }
+        Object.assign(book, { subjectId, title, author: F.author.value.trim(), dir: d.dir, cover: { color: d.cover.color, image: coverImage }, series, paper: d.paper, music: { track: F.music.value, auto: F.musicAuto.checked }, updated: Date.now() });
         await DB.put('books', book);
         m.close();
         await this.load();
         if (Reader.book && Reader.book.id === book.id) { Reader.book = book; Reader.applyPaper(); Reader.render(); }
       } else {
-        const nb = { id: 'k' + uid(), title, author: F.author.value.trim(), dir: d.dir, cover: { color: d.cover.color, image: coverImage }, paper: { ...d.paper }, series, pageIds: [], created: Date.now(), updated: Date.now(), lastSpread: -1 };
+        const nb = { id: 'k' + uid(), subjectId: F.subject.value, title, author: F.author.value.trim(), dir: d.dir, cover: { color: d.cover.color, image: coverImage }, paper: { ...d.paper }, music: { track: F.music.value, auto: F.musicAuto.checked }, series, pageIds: [], created: Date.now(), updated: Date.now(), lastSpread: -1 };
         const pages = [];
         for (let i = 0; i < 4; i++) { const p = { id: 'p' + uid(), bookId: nb.id, html: '', stickies: [], attach: [] }; pages.push(p); nb.pageIds.push(p.id); }
         await DB.putMany('pages', pages);
@@ -238,6 +272,7 @@ const Library = {
         Reader.open(nb.id);
       }
     };
+    $('.bf-paper', f).append(PaperUI.make(d.paper, { preview: true }));
     syncSeg(); preview();
     setTimeout(() => F.title.focus(), 60);
   },

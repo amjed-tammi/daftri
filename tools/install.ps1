@@ -77,7 +77,18 @@ try {
     $lnk.Save()
   }
 
-  Show-DaftariMessage "تم! صار «دفتري» تطبيقاً على جهازك.`n`n• أيقونة «دفتري» على سطح المكتب`n• وفي قائمة ابدأ (تقدر تثبّتها على شريط المهام)`n`nملاحظة: لا تنقل مجلد البرنامج بعد التثبيت، وإذا نقلته شغّل ملف التثبيت مرة ثانية."
+  # ===== ملفات الكتب المشاركة .daftar: دبل كليك بيفتحها بدفتري (للمستخدم الحالي فقط) =====
+  $open = Join-Path $PSScriptRoot 'open.ps1'
+  $cls = 'HKCU:\Software\Classes'
+  New-Item -Path "$cls\.daftar" -Force | Out-Null
+  Set-ItemProperty -Path "$cls\.daftar" -Name '(default)' -Value 'Daftari.Book'
+  New-Item -Path "$cls\Daftari.Book\DefaultIcon" -Force | Out-Null
+  Set-ItemProperty -Path "$cls\Daftari.Book" -Name '(default)' -Value 'كتاب دفتري'
+  Set-ItemProperty -Path "$cls\Daftari.Book\DefaultIcon" -Name '(default)' -Value "$ico,0"
+  New-Item -Path "$cls\Daftari.Book\shell\open\command" -Force | Out-Null
+  Set-ItemProperty -Path "$cls\Daftari.Book\shell\open\command" -Name '(default)' -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$open`" `"%1`""
+
+  Show-DaftariMessage "تم! صار «دفتري» تطبيقاً على جهازك.`n`n• أيقونة «دفتري» على سطح المكتب`n• وفي قائمة ابدأ (تقدر تثبّتها على شريط المهام)`n• وملفات الكتب المشاركة (.daftar) بتنفتح بدبل كليك`n`nملاحظة: لا تنقل مجلد البرنامج بعد التثبيت، وإذا نقلته شغّل ملف التثبيت مرة ثانية."
 }
 catch {
   Add-Type -AssemblyName System.Windows.Forms
