@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>دفتري</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div id="twinkles" aria-hidden="true"><i class="shoot"></i><i class="shoot s2"></i></div>
+<div class="moon" aria-hidden="true"></div>
+
+<!-- المكتبة -->
+<section id="library" class="view">
+  <header class="lib-head">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="44" height="44">
+      <div><h1>دفتري</h1><p class="tag">ورق، حبر، وليل هادئ للكتابة والدراسة</p></div>
+    </div>
+    <div class="lib-actions">
+      <button class="btn primary" id="btnNew" data-ic="plus">كتاب جديد</button>
+      <button class="ib" id="btnLibMore" title="المزيد" data-ic="more"></button>
+    </div>
+  </header>
+  <div id="shelves"></div>
+</section>
+
+<!-- الكتاب -->
+<section id="reader" class="view" hidden>
+  <div id="stage">
+    <div id="book">
+      <div id="bookInner">
+        <div class="cast cast-left"></div><div class="cast cast-right"></div>
+        <div class="slot left"></div><div class="slot right"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="topbar" class="bar top">
+    <div class="tb-group">
+      <button class="ib" id="tbBack" title="رجوع للمكتبة" data-ic="books"></button>
+      <div class="tb-title"><b id="tbTitle"></b><span id="tbSeries"></span></div>
+    </div>
+    <div class="tb-group">
+      <button class="tbtn" id="tbIndex" title="الفهرس" data-ic="list"><span>الفهرس</span></button>
+      <button class="tbtn" id="tbWeb" title="شبكة الأفكار (Ctrl+G)" data-ic="web"><span>الشبكة</span></button>
+      <button class="tbtn" id="tbReview" title="المراجعة ووضع الامتحان" data-ic="cards"><span>مراجعة</span><b class="badge" id="rvBadge" hidden></b></button>
+      <button class="ib" id="tbSearch" title="بحث (Ctrl+F)" data-ic="search"></button>
+      <button class="ib" id="tbFocus" title="وضع التركيز (Ctrl+Shift+F)" data-ic="focus"></button>
+      <span class="tb-sep"></span>
+      <button class="tbtn" id="tbInsert" data-ic="plus"><span>إدراج</span></button>
+      <button class="tbtn" id="tbPaper" data-ic="sliders"><span>الورق</span></button>
+      <button class="ib" id="tbMic" title="تسجيل صوت للصفحة" data-ic="mic"></button>
+      <button class="ib" id="tbEdit" title="الغلاف ومعلومات الكتاب" data-ic="edit"></button>
+      <button class="tbtn" id="tbPdf" title="تصدير PDF (Ctrl+P)" data-ic="pdf"><span>PDF</span></button>
+      <button class="ib" id="tbFull" title="ملء الشاشة" data-ic="full"></button>
+      <button class="ib" id="tbHelp" title="الجولة التعريفية" data-ic="help"></button>
+    </div>
+  </div>
+  <div class="peek peek-top" aria-hidden="true"></div>
+
+  <div id="navbar" class="bar bottom">
+    <button class="ib" id="navPrev" title="الصفحة السابقة"></button>
+    <input type="range" id="pgRange" min="-1" max="1" step="1" aria-label="التنقل بين الصفحات">
+    <button class="pginfo" id="pgInfo" title="اذهب إلى صفحة"></button>
+    <button class="ib" id="navNext" title="الصفحة التالية"></button>
+  </div>
+  <div id="reviewbar" class="bar bottom show reviewbar" hidden></div>
+</section>
+
+<div id="sessionGlow" aria-hidden="true"></div>
+<div id="rope"></div>
+<div class="corner">
+  <button id="btnNight" class="ib floating" title="التذكيرات والمؤقت" data-ic="bell"></button>
+  <button id="btnSound" class="ib floating" title="أصوات الجو" data-ic="music"></button>
+  <span id="streak" class="streak" hidden></span>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="selbar" class="selbar" hidden></div>
+<div id="blockbar" class="selbar small" hidden></div>
+<div id="print"></div>
+
+<script src="js/core.js"></script>
+<script src="js/library.js"></script>
+<script src="js/reader.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/extras.js"></script>
+<script src="js/fonts.js"></script>
+<script src="js/ambience.js"></script>
+<script src="js/study.js"></script>
+<script src="js/finder.js"></script>
+<script src="js/ideaweb.js"></script>
+<script src="js/tour.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# الكتب والبيانات الشخصية ما بتنرفع أبداً
+*.daftari.json
+backup*/
+Profile/
+Daftari/
+*.ico
+
+# ملفات النظام والأدوات
+.claude/
+.vscode/
+Thumbs.db
+Desktop.ini
+.DS_Store
