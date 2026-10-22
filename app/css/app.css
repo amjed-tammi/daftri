@@ -1105,3 +1105,24 @@ body.fmt-docked #navbar, body.fmt-docked .reviewbar { bottom: 68px; }
 @media (max-width: 860px) { .cal { grid-template-columns: 1fr; } .cd-list { max-height: none; } }
 @media (prefers-reduced-motion: reduce) { #btnCal.due .badge, .subj-due, .ts-dot, .cal-d.due::after, .cal-d.due .cal-dots i, .cal-d.just-done, .today-strip { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .cal-d.due::after { box-shadow: 0 0 12px 1px rgba(201, 154, 61, .45); } .ts-dot, .subj-due { box-shadow: 0 0 0 4px rgba(232, 199, 122, .25); } }
+
+/* ===== استيراد الملفات (وورد، إكسل، PDF) ===== */
+.import-ghost { position: absolute !important; z-index: -1; }
+.modal.import-modal { width: 520px; }
+.import-dlg { display: flex; flex-direction: column; gap: 14px; }
+.imp-head { display: flex; align-items: center; gap: 14px; }
+.imp-head h3 { margin: 0 0 2px; font-size: 18px; word-break: break-word; }
+.imp-head p { margin: 0; }
+.imp-ic { flex: none; width: 46px; height: 56px; border-radius: 8px 14px 8px 8px; display: grid; place-items: center; font: 800 12px var(--ui); color: #fff; letter-spacing: .5px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.imp-docx, .imp-txt { background: linear-gradient(160deg, #3d7be0, #1f4fa8); }
+.imp-xlsx, .imp-csv { background: linear-gradient(160deg, #2fa866, #187a45); }
+.imp-pdf { background: linear-gradient(160deg, #e2574c, #b0322a); }
+.imp-opts { display: flex; flex-direction: column; gap: 8px; }
+.imp-opt { display: grid; grid-template-columns: 22px 1fr; column-gap: 12px; align-items: center; text-align: start; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--glass-b); background: rgba(255, 255, 255, .04); color: var(--tx); font: 14px var(--ui); cursor: pointer; transition: background .15s, border-color .15s; }
+.imp-opt .ic { grid-row: span 2; width: 20px; height: 20px; color: var(--mut); }
+.imp-opt b { font-weight: 700; }
+.imp-opt span { grid-column: 2; font-size: 12.5px; color: var(--mut); }
+.imp-opt:hover, .imp-opt:focus-visible { background: rgba(232, 199, 122, .1); border-color: rgba(232, 199, 122, .45); outline: 0; }
+.imp-opt.rec { border-color: rgba(232, 199, 122, .55); background: rgba(232, 199, 122, .12); }
+.imp-opt.rec .ic { color: #f7e5b0; }
+.imp-opt:disabled { opacity: .45; cursor: not-allowed; }

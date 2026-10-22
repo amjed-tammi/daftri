@@ -74,6 +74,8 @@ const __T = (() => {
       shot: async name => { const p = await rpc('shot', { suite: suiteName, name }); if (cur) (cur.shots = cur.shots || []).push(p); return p; },
       viewport: async (w, h) => { await rpc('viewport', { w, h }); await sleep(350); },
       metrics: () => rpc('metrics'),
+      // ملف حقيقي من tests/fixtures كـ File
+      fixture: async (name, type = '') => { const b64 = await rpc('fixture', { name }); const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], name, { type }); },
       gc: () => rpc('gc'),
       info: v => { if (cur) cur.info = v; },
       test: async (name, fn) => {

@@ -15,6 +15,7 @@ const Cmd = {
       { id: 'note', g: 'كتابة', icon: 'note', label: 'ملاحظة لاصقة', en: 'sticky note', ctx: 'book', act: need(l => Stickies.addNote(l)) },
       { id: 'code', g: 'كتابة', icon: 'code', label: 'صندوق كود', en: 'code snippet', ctx: 'book', act: need(l => { l.c.focus(); Editor.ensureCaret(l); Editor.insertCode(l); }) },
       { id: 'mic', g: 'كتابة', icon: 'mic', label: 'تسجيل صوت للصفحة', en: 'record voice audio', ctx: 'book', act: need(l => Voice.attachToPage(l)) },
+      { id: 'import', g: 'كتابة', icon: 'upload', label: 'استيراد ملف Word / Excel / PDF', en: 'import word excel pdf docx xlsx csv file', ctx: 'book', act: need(l => Import.pick(l)) },
       { id: 'addpage', g: 'كتابة', icon: 'addpage', label: 'إضافة صفحة بعد هذه', en: 'add page', ctx: 'book', act: need(l => Reader.insertPageAfter(l.i)) },
       // الدراسة
       { id: 'review', g: 'دراسة', icon: 'cards', label: 'ابدأ مراجعة اليوم', en: 'review flashcards', ctx: 'book', act: () => Study.startReview() },
@@ -36,6 +37,7 @@ const Cmd = {
       // المكتبة
       { id: 'new', g: 'المكتبة', icon: 'plus', label: 'كتاب جديد', en: 'new book create', ctx: 'lib', act: () => Library.openForm() },
       { id: 'subject', g: 'المكتبة', icon: 'folder', label: 'مادة جديدة', en: 'new subject course folder', ctx: 'lib', act: () => Subjects.form() },
+      { id: 'importBook', g: 'المكتبة', icon: 'upload', label: 'كتاب جديد من ملف Word / Excel', en: 'import new book from word excel docx xlsx csv', ctx: 'lib', act: () => pickFile(IMPORT_ACCEPT, false).then(fs => { if (fs && fs.length) Import.newBook(fs[0]); }) },
       { id: 'pdfUp', g: 'المكتبة', icon: 'attach', label: 'رفع ملف PDF (محاضرة، سلايدات)', en: 'upload pdf lecture slides attach', ctx: 'lib', act: () => Files.upload({ subjectId: Library.cur || NO_SUBJECT }) },
       { id: 'open', g: 'المكتبة', icon: 'share', label: 'فتح كتاب مشارَك (.daftar)', en: 'open import shared', ctx: 'lib', act: () => Share.pick() },
       { id: 'trash', g: 'المكتبة', icon: 'trash', label: 'سلة المحذوفات', en: 'trash deleted restore', ctx: 'lib', act: () => Trash.panel() },

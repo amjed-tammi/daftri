@@ -100,6 +100,9 @@ const Editor = {
       const pt = this.pagePoint(pg, e.clientX, e.clientY);
       const imgs = files.filter(f => f.type.startsWith('image/'));
       const vids = files.filter(f => f.type.startsWith('video/'));
+      // ملفات وورد/إكسل/PDF/CSV: بتتحوّل لصفحات بنفس تنسيقها
+      const doc = files.find(f => Import.can(f) || Import.legacy(f));
+      if (doc) Import.file(doc, l);
       if (imgs.length) Stickies.addPhotos(l, imgs, pt);
       if (vids.length) Media2.insertVideo(l, vids[0], pt);
     });
@@ -173,6 +176,15 @@ const Editor = {
       cb = topBlock(c, s.anchorNode);
       if (cb) co = textOffset(cb, s.anchorNode, s.anchorOffset);
     }
+    const t = this.takeOverflow(c, limit, cb, co);
+    cb = t.cb; co = t.co;
+    const moved = t.moved;
+    if (!moved.length) return;
+    this.pushToNext(l, moved, cb && moved.includes(cb) ? cb : null, co);
+    l.save();
+  },
+  // بيشيل من آخر الصفحة كل اللي طالع عن حدّها (وبيقسم الفقرة/الجدول/القائمة عند حد السطر)
+  takeOverflow(c, limit, cb = null, co = 0) {
     const cr = c.getBoundingClientRect();
     const M = { top: cr.top, sc: cr.height / c.offsetHeight || 1 };
     const relB = n => (n.getBoundingClientRect().bottom - M.top) / M.sc;
@@ -195,9 +207,7 @@ const Editor = {
       if (res === 'whole' && !only) { moved.unshift(last); last.remove(); continue; }
       break;
     }
-    if (!moved.length) return;
-    this.pushToNext(l, moved, cb && moved.includes(cb) ? cb : null, co);
-    l.save();
+    return { moved, cb, co };
   },
   split(block, limit, M, relB) {
     const tag = block.tagName;
@@ -256,6 +266,8 @@ const Editor = {
       const ft = tw2.nextNode();
       if (ft) { const t = ft.textContent, t2 = t.replace(/^\s+/, ''); shift = t.length - t2.length; ft.textContent = t2; }
     }
+    // كان في مسافة عند القص؟ منتذكرها حتى لما القطعتين يرجعوا يتجمّعوا ما تلزق الكلمتين
+    if (shift || /\s$/.test(block.textContent)) tail.dataset.sp = '1'; else tail.removeAttribute('data-sp');
     if (!block.textContent && !block.querySelector('br,img')) block.innerHTML = '<br>';
     this.linkHead(block, tail);
     return { tail, at: lo, shift };
@@ -276,8 +288,12 @@ const Editor = {
     if (first.tagName === 'TABLE') {
       const tb = first.tBodies[0] || first;
       [...last.querySelectorAll('tr')].reverse().forEach(tr => tb.prepend(tr));
-    } else first.prepend(...last.childNodes);
+    } else {
+      const glue = first.dataset.sp && !/\s$/.test(last.textContent) && !/^\s/.test(first.textContent);
+      first.prepend(...last.childNodes, ...(glue ? [document.createTextNode(' ')] : []));
+    }
     if (last.dataset.cont) first.dataset.cont = last.dataset.cont; else first.removeAttribute('data-cont');
+    if (last.dataset.sp) first.dataset.sp = '1'; else first.removeAttribute('data-sp');
     moved.pop();
     return { from: last, to: first };
   },
@@ -401,12 +417,23 @@ const Editor = {
     const imgs = [...dt.files].filter(f => f.type.startsWith('image/'));
     if (imgs.length) { e.preventDefault(); Stickies.addPhotos(l, imgs); return; }
     let text = dt.getData('text/plain');
+    const html = dt.getData('text/html');
     e.preventDefault();
-    if (!text) return;
-    text = text.replace(/\r\n?/g, '\n');
+    if (!text && !html) return;
+    text = (text || '').replace(/\r\n?/g, '\n');
     const ae = anchorEl(), pre = ae && ae.closest('pre.code');
     if (pre) { this.insertText(text); this.changed(l); return; }
-    if (looksLikeCode(text)) { this.insertCode(l, text); return; }
+    const table = /<table/i.test(html);
+    if (!table && looksLikeCode(text)) { this.insertCode(l, text); return; }
+    // لصق منسّق (إكسل/وورد/مواقع): جداول وعناوين وخط عريض وألوان بتضل
+    if (html) {
+      const blocks = Clean.html(html);
+      if (blocks.length && (table || blocks.length > 1 || /<(b|i|u|s|a|span|h2|h3|ul|ol|blockquote|sup|sub)[\s>]/.test(blocks.join('')))) { Import.insertHere(l, blocks); return; }
+    }
+    // نص بأعمدة (Tab) = جدول من إكسل أو جوجل شيت
+    const tsv = Clean.tsv(text);
+    if (tsv) { Import.insertHere(l, [tsv]); return; }
+    if (!text) return;
     this.pastePlain(text);
   },
   pastePlain(text) {
@@ -914,6 +941,7 @@ const Ctx = {
       { icon: 'mic', label: hasSel ? 'تسجيل صوت للكلمة المحددة' : 'تسجيل صوت للصفحة', act: doAt(() => hasSel ? Voice.attachToSelection(Sel.save(), l) : Voice.attachToPage(l, e)) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
       { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
+      { icon: 'upload', label: 'ملف Word / Excel / PDF…', act: () => Import.pick(l) },
       ...(hasSel ? [{ icon: 'tape', label: 'اجعله جواباً لسؤال مراجعة', act: doAt(() => Study.mark(Sel.save(), l)) }] : []),
       ...(e.target.closest('.ans') ? [{ icon: 'x', label: 'إلغاء سؤال المراجعة', act: () => Study.unmark(e.target.closest('.ans'), l) }] : []),
       '-', { head: `الصفحة ${l.i + 1}` },

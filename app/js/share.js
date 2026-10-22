@@ -101,6 +101,9 @@ const Share = {
     addEventListener('drop', e => {
       document.body.classList.remove('dropbook');
       if ($('#library').hidden) return;
+      // وورد/إكسل/CSV → كتاب جديد باسم الملف وبنفس تنسيقه
+      const doc = [...(e.dataTransfer?.files || [])].find(x => (Import.can(x) && !Files.isPdf(x)) || Import.legacy(x));
+      if (doc) { e.preventDefault(); Import.newBook(doc); return; }
       // ملفات PDF بتنضاف للمادة المفتوحة
       const pdfs = [...(e.dataTransfer?.files || [])].filter(x => Files.isPdf(x));
       if (pdfs.length) { e.preventDefault(); Files.addFiles(pdfs, { subjectId: Library.cur || NO_SUBJECT }); return; }

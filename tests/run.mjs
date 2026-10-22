@@ -93,6 +93,9 @@ class Browser {
         await this.send('HeapProfiler.collectGarbage');
       } else if (cmd === 'metrics') {
         res = (await this.send('Performance.getMetrics')).result?.metrics;
+      } else if (cmd === 'fixture') {
+        // ملفات حقيقية للاختبار (file:// ما بيسمح بـ fetch)
+        res = fs.readFileSync(path.join(HERE, 'fixtures', path.basename(args.name))).toString('base64');
       }
     } catch (e) { res = { error: e.message }; }
     this.send('Runtime.evaluate', { expression: `window.__rpcDone && window.__rpcDone(${id}, ${JSON.stringify(res)})` });

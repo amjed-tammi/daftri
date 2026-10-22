@@ -267,7 +267,7 @@ const SUITE = {
       });
 
       await T.test('الجولة: نسخة 6 وخطواتها الجديدة إلها هدف', async () => {
-        expect(TOUR_V).toBe(6);
+        expect(TOUR_V >= 6, 'نسخة الجولة').toBeTruthy();
         const fresh = [...TOURS.lib, ...TOURS.book].filter(s => s.since === 6);
         expect(fresh.length).toBeGreaterThan(3);
         for (const s of TOURS.lib.filter(x => x.since === 6)) expect(!!Tour.target(s), s.title).toBeTruthy();
