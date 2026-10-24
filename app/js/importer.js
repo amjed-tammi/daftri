@@ -2,7 +2,6 @@
 /* ============ استيراد الملفات: Word و Excel و CSV و PDF، واللصق المنسّق من أي مكان ============
    كله بدون مكتبات: فك الضغط من المتصفح نفسه (DecompressionStream)، وقراءة XML و PDF بإيدينا. */
 
-const IMPORT_ACCEPT = '.docx,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.pdf';
 
 async function inflateBytes(u8, fmt = 'deflate-raw') {
   const out = new Blob([u8]).stream().pipeThrough(new DecompressionStream(fmt));
@@ -359,11 +358,130 @@ const Sheets = {
     }
     return h + '</tbody></table>';
   },
-  blocks(sheets) {
+  // بطاقات: كل سطر من الجدول العريض = بطاقة (عنوان + «العمود: القيمة»)
+  cards(head, data, val, out) {
+    const names = head.map((h, c) => val(h) || `عمود ${c + 1}`);
+    // أعمدة تابعة لعمود قبلها: «Task 1» ← «Task 1 Hours» و «Task 1 Status» بسطر واحد
+    const parent = names.map((nm, c) => { for (let q = c - 1; q >= Math.max(0, c - 4); q--) if (nm.toLowerCase().startsWith(names[q].toLowerCase() + ' ')) return q; return -1; });
+    const kidsOf = names.map((_, c) => parent.map((pp, k) => pp === c ? k : -1).filter(k => k >= 0));
+    // عمود تجميع (مثل «الأسبوع» المدموج على كذا سطر) بيصير عنوان قسم
+    const col0 = data.map(r => val(r[0])), filled = col0.filter(Boolean);
+    const groupCol = filled.length && filled.length < data.length && (new Set(filled).size <= Math.max(1, data.length / 3) || filled.length < data.length * .6);
+    let lastGroup = '';
+    data.forEach((r, k) => {
+      const has = c => !!val(r[c]);
+      let cols = r.map((_, c) => c).filter(has);
+      if (groupCol) {
+        const gv = col0[k] || lastGroup;
+        if (gv && gv !== lastGroup) { out.push(`<h2>${esc(names[0])}: ${esc(gv)}</h2>`); lastGroup = gv; }
+        cols = cols.filter(c => c !== 0);
+      }
+      if (!cols.length) return;
+      // عنوان البطاقة: أول خانة أو خانتين قصار (مثل التاريخ واليوم)
+      const title = [];
+      for (const c of cols) { if (val(r[c]).length <= 40 && title.length < 2 && !kidsOf[c].some(has)) title.push(c); else break; }
+      if (!title.length) title.push(cols[0]);
+      out.push(`<h3>${title.map(c => this.cell(r[c])).join(' · ')}</h3>`);
+      const shortL = [], lines = [];
+      for (const c of cols) {
+        if (title.includes(c)) continue;
+        if (parent[c] >= 0 && has(parent[c])) continue; // بيطلع مع أبوه
+        const kids = kidsOf[c].filter(has).map(kk => `${esc(names[kk].slice(names[c].length).trim())} ${this.cell(r[kk])}`);
+        const line = `<b>${esc(names[c])}:</b> ${this.cell(r[c])}${kids.length ? ` <i>(${kids.join(' · ')})</i>` : ''}`;
+        if (!kids.length && val(r[c]).length <= 24 && names[c].length <= 26) shortL.push(line); else lines.push(line);
+      }
+      if (shortL.length) out.push(`<p>${shortL.join(' &nbsp;·&nbsp; ')}</p>`);
+      lines.forEach(x => out.push(`<p>${x}</p>`));
+      out.push('<p><br></p>');
+    });
+  },
+  // بنفهم الشيت متل الإنسان: سطر عنوان، سطر ملخّص (اسم/قيمة)، وجدول البيانات
+  analyze(sheet) {
+    const g = sheet.grid, val = c => c && String(c.v).trim() ? String(c.v).trim() : '';
+    const rows = [];
+    for (let r = 0; r < g.length; r++) rows.push(g[r] || []);
+    // الأعمدة الفاضية بالكامل (تنسيق بس) منشيلها
+    let maxC = 0; rows.forEach(r => r.forEach((c, i) => { if (val(c)) maxC = Math.max(maxC, i + 1); }));
+    const used = []; for (let c = 0; c < maxC; c++) if (rows.some(r => val(r[c]))) used.push(c);
+    const vmerge = new Set(); // خلايا مغطّاة بدمج عمودي → نفس قيمة اللي فوق
+    sheet.merges.forEach(m => { for (let r = m.r0 + 1; r <= m.r1; r++) vmerge.add(r + ',' + m.c0); });
+    const info = rows.map(r => { const cells = used.map(c => r[c] || { v: '' }); return { cells, n: cells.filter(val).length }; });
+    const numish = s => /^[-+]?[\d.,]+%?$|^\d{4}-\d{2}-\d{2}/.test(s);
+    // سطر ملخّص: اسم ← قيمة (رقم/تاريخ/نسبة) ← اسم ← قيمة…
+    const isPairs = i => { const v = info[i].cells.filter(val).map(val); if (v.length < 4 || v.length % 2) return false; const vals = v.filter((_, k) => k % 2), keys = v.filter((_, k) => !(k % 2)); return vals.filter(numish).length >= vals.length * .7 && keys.every(x => !numish(x)); };
+    // سطر العناوين: بعده سطور بيانات شبهه (مش لحاله)
+    const isHeader = i => {
+      const n = info[i].n; if (n < 2 || isPairs(i)) return false;
+      const next = []; for (let j = i + 1; j < info.length && next.length < 3; j++) if (info[j].n) next.push(info[j].n); else if (next.length) break;
+      return next.length >= 1 && next.some(m => m >= Math.max(2, n * .3)) && (next.length >= 2 || next[0] >= n * .6);
+    };
+    const parts = [];
+    for (let i = 0; i < info.length; i++) {
+      const { cells, n } = info[i];
+      if (!n) continue;
+      if (isHeader(i)) {
+        const grp = { type: 'table', rows: [cells], ri: [i] };
+        for (let j = i + 1; j < info.length && info[j].n; j++) { grp.rows.push(info[j].cells); grp.ri.push(j); i = j; }
+        parts.push(grp);
+      } else if (n === 1) {
+        const c = cells.find(val);
+        parts.push({ type: val(c).length > 70 ? 'note' : 'title', text: val(c), cell: c });
+      } else {
+        // سطر لحاله فيه كذا خانة = أزواج «اسم: قيمة»
+        const v = cells.filter(val); const pairs = [];
+        for (let k = 0; k < v.length; k += 2) pairs.push([v[k], v[k + 1] || { v: '' }]);
+        const last = parts[parts.length - 1];
+        if (last && last.type === 'pairs') last.pairs.push(...pairs); else parts.push({ type: 'pairs', pairs });
+      }
+    }
+    return { parts, used, vmerge, val };
+  },
+  // بيتّسع الجدول بعرض صفحة الدفتر؟ (تقدير: ~7px للحرف، حد 24 حرف للعمود)
+  fits(rows, val) {
+    const cols = rows[0] ? rows[0].length : 0;
+    let w = 0;
+    for (let c = 0; c < cols; c++) w += 18 + 7 * Math.min(24, Math.max(3, ...rows.map(r => Math.min(60, val(r[c]).length))));
+    const long = rows.flat().filter(x => val(x).length > 60).length;
+    return cols <= 6 && w <= 560 && long <= rows.length;
+  },
+  wide(sheets) { return sheets.some(s => { const a = this.analyze(s); return a.parts.some(p => p.type === 'table' && p.rows.length > 1 && !this.fits(p.rows, a.val)); }); },
+  cell(x) { let v = esc(String(x.v).trim()).replace(/\n/g, '<br>'); if (x.color) v = `<span style="color:${x.color}">${v}</span>`; if (x.i) v = `<i>${v}</i>`; return v; },
+  // اتجاه الجدول: زي الشيت (أو حسب لغة محتواه)
+  dir(s, rows, val) {
+    if (s.rtl) return 'rtl';
+    const t = rows.flat().map(val).join('');
+    return (t.match(/[\u0600-\u06ff]/g) || []).length > (t.match(/[A-Za-z]/g) || []).length ? 'rtl' : 'ltr';
+  },
+  blocks(sheets, mode = 'auto') {
     const out = [];
     const many = sheets.filter(s => s.grid.length).length > 1;
-    sheets.forEach(s => { const t = this.toHtml(s); if (!t) return; if (many && s.name) out.push(`<h3>${esc(s.name)}</h3>`); out.push(t, '<p><br></p>'); });
-    if (out[out.length - 1] === '<p><br></p>') out.pop();
+    for (const s of sheets) {
+      const a = this.analyze(s), val = a.val;
+      if (!a.parts.length) continue;
+      if (many && s.name) out.push(`<h2>${esc(s.name)}</h2>`);
+      // شيت بسيط (جدول واحد بيتّسع): زي ما هو مع الدمج والألوان
+      const tables = a.parts.filter(p => p.type === 'table');
+      if (a.parts.length === 1 && tables.length === 1 && (mode === 'table' || this.fits(tables[0].rows, val))) { out.push(this.toHtml(s), '<p><br></p>'); continue; }
+      a.parts.forEach((p, k) => {
+        // أول سطر بالشيت = عنوانه (حتى لو طويل)
+        if (p.type === 'title' || (p.type === 'note' && k === 0)) { out.push(k === 0 && !many ? `<h2>${esc(p.text)}</h2>` : `<h3>${esc(p.text)}</h3>`); return; }
+        if (p.type === 'note') { const v = this.cell(p.cell); out.push(`<p>${p.cell.b ? `<b>${v}</b>` : v}</p>`); return; }
+        if (p.type === 'pairs') {
+          out.push(`<table class="tbl" dir="${this.dir(s, p.pairs, val)}"><tbody>` + p.pairs.map(([k2, v]) => `<tr><th>${this.cell(k2)}</th><td>${this.cell(v) || '<br>'}</td></tr>`).join('') + '</tbody></table>', '<p><br></p>');
+          return;
+        }
+        const [head, ...data] = p.rows;
+        if (mode === 'table' || !data.length || this.fits(p.rows, val)) {
+          // جدول بالأعمدة المستعملة بس
+          const keep = head.map((_, c) => p.rows.some(r => val(r[c])));
+          const tr = (r, tag) => '<tr>' + r.filter((_, c) => keep[c]).map(x => { const css = (x.bg ? `background-color:${x.bg};` : '') + (x.al ? `text-align:${x.al};` : ''); let v = this.cell(x) || '<br>'; if (x.b && tag === 'td') v = `<b>${v}</b>`; return `<${tag}${css ? ` style="${css}"` : ''}>${v}</${tag}>`; }).join('') + '</tr>';
+          out.push(`<table class="tbl${keep.filter(Boolean).length > 6 ? ' tbl-wide' : ''}" dir="${this.dir(s, p.rows, val)}"><tbody>` + tr(head, 'th') + data.map(r => tr(r, 'td')).join('') + '</tbody></table>', '<p><br></p>');
+          return;
+        }
+        this.cards(head, data, val, out);
+      });
+    }
+    while (out[out.length - 1] === '<p><br></p>') out.pop();
     return out;
   },
 };
@@ -680,6 +798,29 @@ class PdfLex {
 
 /* ===== لصق منسّق: من إكسل (جدول)، وورد، المواقع… بنظّفه وبنخلي الشكل ===== */
 const Clean = {
+  // أسطر مرقّمة من الحافظة: نحتفظ بالقيمة وشكل الأرقام، والنص يحدد الاتجاه.
+  numbered(text) {
+    const lines = text.split('\n'), out = [];
+    let found = false;
+    const match = line => line.match(/^\s*([0-9٠-٩۰-۹]+)[.)۔]\s+(.+)$/);
+    for (let i = 0; i < lines.length;) {
+      const first = match(lines[i]);
+      if (!first || !Number.isSafeInteger(+latinDigits(first[1]))) { out.push(`<p>${esc(lines[i++]) || '<br>'}</p>`); continue; }
+      const style = digits => /[٠-٩]/.test(digits) ? 'arabic-indic' : /[۰-۹]/.test(digits) ? 'persian' : 'decimal';
+      const kind = style(first[1]);
+      let h = `<ol start="${+latinDigits(first[1])}" style="list-style-type:${kind}">`;
+      let next = +latinDigits(first[1]);
+      while (i < lines.length) {
+        const m = match(lines[i]);
+        if (!m || style(m[1]) !== kind || !Number.isSafeInteger(+latinDigits(m[1]))) break;
+        const value = +latinDigits(m[1]);
+        h += `<li${value !== next ? ` value="${value}"` : ''}>${esc(m[2])}</li>`;
+        next = value + 1; i++;
+      }
+      out.push(h + '</ol>'); found = true;
+    }
+    return found ? out : null;
+  },
   BLOCK: /^(P|DIV|H[1-6]|UL|OL|LI|TABLE|BLOCKQUOTE|PRE|SECTION|ARTICLE|HEADER|FOOTER|MAIN|ASIDE|NAV|FIGURE|DL|DT|DD|CENTER|ADDRESS|TR|TBODY|THEAD|TFOOT|HR|FORM)$/,
   SKIP: /^(SCRIPT|STYLE|META|LINK|TITLE|HEAD|SVG|IFRAME|OBJECT|EMBED|BUTTON|INPUT|SELECT|TEXTAREA|NOSCRIPT|TEMPLATE|IMG|VIDEO|AUDIO|CANVAS|XML|COLGROUP|COL)$/,
   html(src) {
@@ -743,7 +884,14 @@ const Clean = {
       return h + '</tbody></table>';
     };
     const list = (e, ordered) => {
-      let h = `<${ordered ? 'ol' : 'ul'}>`;
+      const direction = n => /^(rtl|ltr|auto)$/i.test(n.getAttribute('dir') || '') ? ` dir="${n.getAttribute('dir').toLowerCase()}"` : '';
+      const number = (n, attr) => {
+        const raw = latinDigits(n.getAttribute(attr)).trim();
+        return /^-?\d+$/.test(raw) && Number.isSafeInteger(+raw) ? ` ${attr}="${+raw}"` : '';
+      };
+      const type = e.getAttribute('type');
+      const style = prop(css(e), 'list-style-type');
+      let h = `<${ordered ? 'ol' : 'ul'}${direction(e)}${ordered ? number(e, 'start') + (e.hasAttribute('reversed') ? ' reversed' : '') + (/^(1|a|A|i|I)$/.test(type || '') ? ` type="${type}"` : '') : ''}${/^(decimal|decimal-leading-zero|arabic-indic|persian|lower-alpha|upper-alpha|lower-roman|upper-roman|disc|circle|square)$/.test(style) ? ` style="list-style-type:${style}"` : ''}>`;
       for (const li of e.children) {
         if (li.tagName === 'LI') {
           let inner = '';
@@ -752,7 +900,7 @@ const Clean = {
             else if (n.nodeType === 1 && !this.SKIP.test(n.tagName)) inner += wrapFmt(n, css(n), inline(n));
             else if (n.nodeType === 3) inner += esc(n.data.replace(/\s+/g, ' '));
           }
-          h += `<li>${inner.trim() || '<br>'}</li>`;
+          h += `<li${direction(li)}${ordered ? number(li, 'value') : ''}>${inner.trim() || '<br>'}</li>`;
         } else if (li.tagName === 'UL' || li.tagName === 'OL') h += list(li, li.tagName === 'OL');
       }
       return h + `</${ordered ? 'ol' : 'ul'}>`;
@@ -798,8 +946,8 @@ const Clean = {
 
 /* ===== الاستيراد للكتاب: نافذة الاختيار، تقسيم الصفحات، والإدراج ===== */
 const Import = {
-  can(f) { return /\.(docx|xlsx|xlsm|csv|tsv|txt|md|pdf)$/i.test(f.name || '') || f.type === 'application/pdf'; },
-  legacy(f) { return /\.(doc|xls|ppt|pptx|odt|ods|rtf)$/i.test(f.name || ''); },
+  can(f) { return Importer.can(f); },
+  legacy(f) { return Importer.legacy(f); },
   kind(f) { const e = (f.name.match(/\.(\w+)$/) || [])[1]?.toLowerCase(); return e === 'xlsm' ? 'xlsx' : e === 'tsv' ? 'csv' : e === 'md' ? 'txt' : f.type === 'application/pdf' ? 'pdf' : e; },
   title(f) { return (f.name || 'ملف').replace(/\.\w+$/, '').replace(/[_]+/g, ' ').trim() || 'ملف'; },
   label: { docx: 'وورد', xlsx: 'إكسل', csv: 'جدول CSV', txt: 'نص', pdf: 'PDF' },
@@ -807,8 +955,7 @@ const Import = {
   async parse(f) {
     const k = this.kind(f);
     if (k === 'docx') return Docx.read(f);
-    if (k === 'xlsx') return { blocks: Sheets.blocks(await Sheets.readXlsx(f)), images: [] };
-    if (k === 'csv') return { blocks: Sheets.blocks(await Sheets.readCsv(f)), images: [] };
+    if (k === 'xlsx' || k === 'csv') { const sheets = k === 'xlsx' ? await Sheets.readXlsx(f) : await Sheets.readCsv(f); return { blocks: Sheets.blocks(sheets), images: [], sheets }; }
     if (k === 'txt') { const t = (await f.text()).replace(/\r\n?/g, '\n'); return { blocks: t.split(/\n/).map(x => /^#{1,2}\s/.test(x) ? `<h2>${esc(x.replace(/^#+\s*/, ''))}</h2>` : /^#{3,}\s/.test(x) ? `<h3>${esc(x.replace(/^#+\s*/, ''))}</h3>` : `<p>${esc(x) || '<br>'}</p>`), images: [] }; }
     if (k === 'pdf') { const pages = await PdfText.read(f); const blocks = []; pages.forEach((p, i) => { if (i && blocks.length) blocks.push('\f'); blocks.push(...p); }); return { blocks, images: [], pdfPages: pages.length, garbled: !!pages.garbled, chars: pages.flat().join('').replace(/<[^>]+>/g, '').length }; }
     throw new Error('نوع الملف مش مدعوم');
@@ -838,18 +985,23 @@ const Import = {
     };
     const groups = [[]];
     blocks.forEach(b => { if (b === '\f') groups.push([]); else groups[groups.length - 1].push(b); });
+    // منعبّي الصفحة قطعة قطعة (متل الكتابة)، ولما تطفح منقص الزيادة ومنكمّل بصفحة جديدة
     for (const g of groups) {
       if (!g.length) continue;
-      c.innerHTML = g.join('');
-      Editor.normalize && Editor.normalize(c);
-      for (let guard = 0; guard < 400; guard++) {
+      const tmp = document.createElement('div'); tmp.innerHTML = g.join('');
+      Editor.normalize && Editor.normalize(tmp);
+      const queue = [...tmp.childNodes];
+      c.innerHTML = '';
+      for (let guard = 0; queue.length && guard < 200000; guard++) {
+        c.append(queue.shift());
         c.scrollTop = 0;
-        if (!limit || c.scrollHeight <= limit + 1) { take(); break; }
+        if (!limit || c.scrollHeight <= limit + 1) continue;
         const t = Editor.takeOverflow(c, limit);
-        if (!t.moved.length) { take(); break; } // ما بينقسم (صورة أو سطر ضخم): بنخليه زي ما هو
-        take();
-        c.innerHTML = ''; c.append(...t.moved);
+        take(); // ما بينقسم (صورة أو سطر ضخم)؟ بنخليه بصفحته زي ما هو
+        c.innerHTML = '';
+        queue.unshift(...t.moved);
       }
+      if (c.childNodes.length) take();
     }
     ghost.remove();
     return pages.filter(p => p.html || p.imgs.length);
@@ -926,19 +1078,31 @@ const Import = {
   },
   choose(f, l, parsed, extra = '') {
     const name = this.title(f), k = this.kind(f);
-    const pages = this.paginate(l, parsed.blocks, parsed.images).length;
+    // شيت عريض: بنخيّر بين بطاقات (لكل سطر) وجدول كامل
+    const wide = parsed.sheets && Sheets.wide(parsed.sheets);
+    let pages = this.paginate(l, parsed.blocks, parsed.images).length;
+    const count = n => `${n} ${n === 1 ? 'صفحة' : 'صفحات'}`;
     const small = pages <= 1 && !parsed.images.length;
     const n = el(`<div class="import-dlg">
-      <div class="imp-head"><span class="imp-ic imp-${k}">${esc(k === 'xlsx' || k === 'csv' ? 'XLS' : k.toUpperCase())}</span><div><h3 dir="auto">${esc(name)}</h3><p class="muted sm">${esc(this.label[k] || '')} · ${pages} ${pages === 1 ? 'صفحة' : 'صفحات'} بهالكتاب${parsed.images.length ? ` · ${parsed.images.length} صور` : ''}${extra}</p></div></div>
-      <p class="muted">العناوين والخط العريض والألوان والجداول والقوائم بتضل زي ما هي، والنص بيتوزع على الصفحات لحاله.</p>
+      <div class="imp-head"><span class="imp-ic imp-${k}">${esc(k === 'xlsx' || k === 'csv' ? 'XLS' : k.toUpperCase())}</span><div><h3 dir="auto">${esc(name)}</h3><p class="muted sm">${esc(this.label[k] || '')} · <span class="imp-count">${count(pages)}</span> بهالكتاب${parsed.images.length ? ` · ${parsed.images.length} صور` : ''}${extra}</p></div></div>
+      <p class="muted">${wide ? 'الجدول عريض على صفحة الدفتر، فخلّينا كل سطر منه «بطاقة» واضحة: عنوانه، وتحته كل عمود مع قيمته.' : 'العناوين والخط العريض والألوان والجداول والقوائم بتضل زي ما هي، والنص بيتوزع على الصفحات لحاله.'}</p>
+      ${wide ? `<div class="imp-mode" role="radiogroup" aria-label="شكل الجدول"><button class="on" data-m="auto" role="radio" aria-checked="true">${ic('note')} بطاقات (أسهل للقراءة)</button><button data-m="table" role="radio" aria-checked="false">${ic('table')} جدول كامل</button></div>` : ''}
       <div class="imp-opts">
-        <button class="imp-opt" data-a="pages">${ic('addpage')}<b>صفحات جديدة بعد هالصفحة</b><span>${pages} ${pages === 1 ? 'صفحة' : 'صفحات'} — بيضل اللي كاتبه زي ما هو</span></button>
+        <button class="imp-opt" data-a="pages">${ic('addpage')}<b>صفحات جديدة بعد هالصفحة</b><span><span class="imp-count">${count(pages)}</span> — بيضل اللي كاتبه زي ما هو</span></button>
         <button class="imp-opt" data-a="here">${ic('plus')}<b>هون، مكان المؤشر</b><span>بيتدخّل جوّا الصفحة وبيكمل على اللي بعدها</span></button>
       </div>
       <div class="row end"><button class="btn ghost" data-a="cancel">إلغاء</button></div></div>`);
     const m = Modal.open(n, { cls: 'import-modal' });
     $(`[data-a=${small ? 'here' : 'pages'}]`, n).classList.add('rec');
     n.onclick = async e => {
+      const mb = e.target.closest('[data-m]');
+      if (mb) {
+        $$('[data-m]', n).forEach(x => { x.classList.toggle('on', x === mb); x.setAttribute('aria-checked', x === mb); });
+        parsed.blocks = Sheets.blocks(parsed.sheets, mb.dataset.m);
+        pages = this.paginate(l, parsed.blocks, parsed.images).length;
+        $$('.imp-count', n).forEach(x => { x.textContent = count(pages); });
+        return;
+      }
       const b = e.target.closest('[data-a]'); if (!b) return;
       m.close();
       if (b.dataset.a === 'pages') { const c = await this.toPages(l, parsed); this.done(name, c); }
@@ -969,7 +1133,7 @@ const Import = {
     };
     setTimeout(() => $('.imp-opt.rec', n)?.focus(), 30);
   },
-  pick(l) { pickFile(IMPORT_ACCEPT, false).then(fs => { if (fs && fs.length) this.file(fs[0], l); }); },
+  pick(l) { pickFile(Importer.ACCEPT, false).then(fs => { if (fs && fs.length) this.file(fs[0], l); }); },
   // من المكتبة: ملف وورد/إكسل → كتاب جديد باسمه
   async newBook(f) {
     if (this.legacy(f)) return this.file(f, null);

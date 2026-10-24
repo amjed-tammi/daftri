@@ -4,7 +4,11 @@ const SUITE = {
   phases: [
     async T => {
       const { expect } = T;
-      await T.test('أول ما يفتح: جولة المكتبة بتشتغل لحالها', async () => {
+      await T.test('أول ما يفتح: بيسأله «شو بتعمل؟»، وبعد «تخطّي» جولة المكتبة بتشتغل لحالها', async () => {
+        await T.waitFor(() => document.querySelector('.onboard .ob-card'), 4000, 'سؤال أول تشغيل');
+        expect(document.querySelectorAll('.ob-card').length).toBe(4);
+        await T.shot('onboard');
+        await T.mouse.click('.onboard [data-a=skip]');
         await T.waitFor(() => Tour.active === 'lib', 4000, 'جولة المكتبة');
       });
       await T.test('بيمشي بالجولة كلها بالضغط على «التالي» وبتفتح الكتاب التجريبي', async () => {

@@ -9,5 +9,5 @@
   <path d="M9 30c8-3 16-2 23 2v22c-7-4-15-5-23-2z" fill="url(#pg)"/>
   <path d="M55 30c-8-3-16-2-23 2v22c7-4 15-5 23-2z" fill="url(#pg)"/>
   <path d="M32 32v22" stroke="#b89a5c" stroke-width="1.2"/>
-  <g stroke="#9fb3d9" stroke-width=".9" opacity=".9"><path d="M13 36c5-1.5 10-1 15 1M13 41c5-1.5 10-1 15 1M13 46c5-1.5 10-1 15 1M36 37c5-2 10-2.5 15-1M36 42c5-2 10-2.5 15-1M36 47c5-2 10-2.5 15-1"/></g>
+  <g stroke="#9fb3d9" stroke-width=".9" opacity=".9" fill="none" stroke-linecap="round"><path d="M13 36c5-1.5 10-1 15 1M13 41c5-1.5 10-1 15 1M13 46c5-1.5 10-1 15 1M36 37c5-2 10-2.5 15-1M36 42c5-2 10-2.5 15-1M36 47c5-2 10-2.5 15-1"/></g>
 </svg>

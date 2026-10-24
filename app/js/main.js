@@ -26,7 +26,7 @@
   // قائمة «⋯» بالمكتبة: مرتبة بمجموعات، وكل شي من مصدر واحد (Cmd)
   $('#btnLibMore').onclick = async e => {
     const t = e.currentTarget, n = await Trash.count();
-    const items = Cmd.menu(['search', 'cal', 'journal', '-', 'subject', 'pdfUp', '-', 'open', 'backup', 'restore', 'trash', '-', 'tour']);
+    const items = Cmd.menu(['search', 'cal', 'journal', '-', 'subject', 'pdfUp', '-', 'open', 'backup', 'restore', 'trash', '-', ...(Pwa.installed() ? [] : ['install']), 'tour']);
     const tr = items.find(x => x.label === 'سلة المحذوفات'); if (tr && n) tr.label += ` (${n})`;
     Menu.open(t, [{ icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() }, '-', ...items]);
   };
@@ -51,7 +51,7 @@
     Menu.open(e.currentTarget, [
       { icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() },
       '-',
-      ...Cmd.menu(['pdf', 'share', 'edit', 'mic', 'addpage', '-', 'pdfs', 'planBook', 'cal', 'journal', '-', 'full', 'tour']),
+      ...Cmd.menu(['sheet', 'pdf', 'share', 'edit', 'mic', 'addpage', '-', 'pdfs', 'planBook', 'cal', 'journal', '-', 'full', 'tour']),
     ]);
     fromTop();
   };
@@ -75,7 +75,7 @@
       { icon: 'mic', label: 'تسجيل صوت للصفحة', act: () => Voice.attachToPage(l) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
       { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
-      { icon: 'upload', label: 'ملف Word / Excel / PDF / CSV…', act: () => Import.pick(l) },
+      { icon: 'upload', label: 'ملف Word / Excel / PDF / CSV…', act: () => Importer.pick(l) },
       '-',
       { icon: 'addpage', label: 'إضافة صفحة بعد هذه', act: () => Reader.insertPageAfter(l.i) },
     ]);
@@ -87,8 +87,18 @@
   $('#navNext').onclick = () => Reader.turn(1);
   $('#pgRange').addEventListener('change', e => { const t = +e.target.value; if (t !== Reader.s) Reader.turn(t > Reader.s ? 1 : -1, t); });
   $('#pgInfo').onclick = e => {
-    const f = el(`<form class="panel goto"><label class="fld"><span>اذهب إلى صفحة</span><input class="inp" type="number" min="1" max="${Reader.pages.length}" value="${Math.max(1, 2 * Reader.s + 1)}"></label><button class="btn primary">اذهب</button></form>`);
-    f.onsubmit = ev => { ev.preventDefault(); const n = parseInt($('input', f).value, 10); Pop.close(); if (n >= 1) Reader.goToPage(n - 1); };
+    const f = el(`<form class="panel goto"><label class="fld"><span>اذهب إلى صفحة</span><input class="inp" type="text" dir="auto" inputmode="numeric" required value="${Math.max(1, 2 * Reader.s + 1)}"></label><button class="btn primary">اذهب</button></form>`);
+    const input = $('input', f);
+    input.oninput = () => input.setCustomValidity('');
+    f.onsubmit = ev => {
+      ev.preventDefault();
+      const raw = latinDigits(input.value).trim(), n = Number(raw);
+      if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n < 1 || n > Reader.pages.length) {
+        input.setCustomValidity(`اكتب رقم صفحة من 1 إلى ${Reader.pages.length} (مثلاً 2 أو ٢)`);
+        input.reportValidity(); return;
+      }
+      Pop.close(); Reader.goToPage(n - 1);
+    };
     Pop.open(e.currentTarget, f, { place: 'above', cls: 'panel-pop' });
     if (Pop.cur) Pop.cur._from = '#navbar';
     setTimeout(() => $('input', f).select(), 20);
@@ -97,6 +107,8 @@
   // لوحة المفاتيح
   document.addEventListener('keydown', e => {
     const mod = e.ctrlKey || e.metaKey;
+    // لا ننفّذ أوامر الكتاب خلف نافذة أو قائمة مفتوحة.
+    if (e.defaultPrevented || $('.modal-back') || Pop.cur || Tour.active) return;
     if (mod && e.code === 'Slash') { e.preventDefault(); Palette.open(); return; }
     if (mod && e.code === 'KeyS') { e.preventDefault(); Editor.flushAll(); Toast.show({ icon: 'check', text: 'محفوظ ✓ (الحفظ تلقائي دائماً)', timeout: 1500 }); return; }
     if (mod && !e.shiftKey && e.code === 'KeyF') { e.preventDefault(); if (!$('.modal-back')) Finder.open(); return; }
@@ -106,6 +118,7 @@
       else Toast.show({ icon: 'pdf', text: 'افتح الكتاب اللي بدك تصدّره، بعدين اضغط PDF أو Ctrl+P', timeout: 3500 });
       return;
     }
+    if (e.key === 'Enter' && !$('#library').hidden && !$('.modal-back') && !Pop.cur && !Tour.active && (!document.activeElement || document.activeElement === document.body)) { const cc = $('.continue-card'); if (cc) { e.preventDefault(); cc.click(); } return; }
     if ($('#reader').hidden || !Reader.book) return;
     if (mod && e.code === 'KeyG') { e.preventDefault(); IdeaWeb.open(); return; }
     if (mod && e.shiftKey && e.code === 'KeyF') { e.preventDefault(); Study.setFocus(!Study.focus); return; }
@@ -139,7 +152,14 @@
   Trash.autoPurge().catch(() => {});
   Share.wireDrop();
   Share.inbox().catch(e => console.warn(e));
-  Tour.maybe('lib'); // جولة الترحيب أول مرة، أو «شوف الجديد» بعد كل إضافة
+  Pwa.init();
+  // منظّف اللصق وقارئ الملفات: بنحمّله بهدوء بعد ما التطبيق يرتاح، فأول لصق بيكون فوري
+  setTimeout(() => { const go = () => Lazy.need('importer').catch(() => {}); if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 4000 }); else go(); }, 6000);
+  AutoBackup.init();
+  Prayer.init();
+  Onboard.applyProfile();
+  // أول مرة: سؤال «شو بتعمل؟» بيجهّز المواد والدفاتر. وبعدها جولة الترحيب، أو «شوف الجديد» بعد كل إضافة
+  if (Onboard.should()) Onboard.open(); else Tour.maybe('lib');
   setTimeout(() => { if ($('#reader').hidden) Cal.nudge(); }, 1800); // «مطلوب اليوم» مرة باليوم
   performance.mark('daftari-booted');
   document.body.dataset.booted = '1';

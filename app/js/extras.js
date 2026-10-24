@@ -267,6 +267,11 @@ const Rope = {
     Sound.chime(); setTimeout(() => Sound.chime(), 1700);
     if (Reminders.cfg.sys && document.hidden && window.Notification && Notification.permission === 'granted') new Notification('دفتري — انتهى الوقت', { body: 'خذ استراحة قصيرة ✦' });
   },
+  pause(prayer = false) {
+    if (!this.run || this.run.paused) return;
+    this.run.paused = this.remaining(); this.save(); this.paint();
+    if (prayer) Toast.show({ emoji: '🤲', text: 'وقّفنا الجلسة. لما ترجع اضغط الحبل ← «استئناف» وبتكمّل من نفس الدقيقة.', timeout: 6000 });
+  },
   menu() {
     const items = this.run ? [
       { head: 'المتبقي ' + fmtTime(this.remaining() / 1000) },
@@ -292,6 +297,78 @@ const Rope = {
     this.swing();
   },
   swing() { const r = $('#rope'); r.classList.remove('swing'); void r.offsetWidth; r.classList.add('swing'); },
+};
+
+/* ============ النسخ الاحتياطي التلقائي ============
+   بمتصفحات كروم/إيدج: الطالب بيختار مجلد مرة وحدة (مثلاً جوّا OneDrive أو Google Drive) وكل يوم بتنحفظ نسخة لحالها،
+   وبنخلي آخر 7 أيام. بالمتصفحات اللي ما بتسمح (آيفون، فايرفوكس): تذكير لطيف كل أسبوع ينزّل نسخة. ما في سيرفر ولا حساب. */
+const AutoBackup = {
+  can: typeof window.showDirectoryPicker === 'function',
+  NAME: /^دفتري \d{4}-\d{2}-\d{2}\.daftari\.json$/,
+  get c() { return Settings.d.backup; },
+  async dir() { const r = await DB.get('meta', 'backupDir'); return r && r.handle; },
+  init() {
+    if (!this.c.since) { this.c.since = Date.now(); Settings.save(); }
+    setTimeout(() => this.run().catch(e => console.warn('backup', e)), 15000);
+    setInterval(() => this.run().catch(() => {}), 20 * 60e3);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.run().catch(() => {}); });
+  },
+  // اختيار المجلد (لازم من ضغطة زر)
+  async pick() {
+    if (!this.can) { Toast.show({ icon: 'download', title: 'متصفحك ما بيسمح بمجلد تلقائي', text: 'بنذكّرك كل أسبوع تنزّل نسخة، أو افتح دفتري من Edge أو Chrome على الكمبيوتر.', timeout: 7000 }); return false; }
+    let h;
+    try { h = await showDirectoryPicker({ id: 'daftari-backup', mode: 'readwrite', startIn: 'documents' }); } catch { return false; }
+    await DB.put('meta', { id: 'backupDir', handle: h });
+    Object.assign(this.c, { on: true, dir: h.name, sig: '' }); Settings.save();
+    const r = await this.run(true);
+    if (r === 'ok') Toast.show({ icon: 'check', title: 'النسخ الاحتياطي التلقائي شغّال ✦', text: `كل يوم بتنحفظ نسخة بمجلد «${h.name}» (آخر 7 أيام).`, timeout: 5000 });
+    return true;
+  },
+  off() { this.c.on = false; Settings.save(); },
+  // بصمة صغيرة للمكتبة: ما بنكتب نسخة إذا ما تغيّر شي
+  async sig() {
+    const books = await DB.all('books');
+    const n = await Promise.all(['plans', 'exams', 'cards', 'journal', 'subjects', 'files', 'links'].map(s => DB.all(s).then(x => x.length)));
+    return books.length + ':' + Math.max(0, ...books.map(b => b.updated || 0)) + ':' + n.join(',');
+  },
+  async run(force = false, ask = false) {
+    const c = this.c;
+    if (!c.on) return this.remind();
+    if (!this.can) return this.remind();
+    const h = await this.dir(); if (!h) return 'nodir';
+    const sig = await this.sig();
+    if (!force && c.sig === sig) return 'same';
+    const o = { mode: 'readwrite' };
+    if ((await h.queryPermission(o)) !== 'granted' && !(ask && (await h.requestPermission(o)) === 'granted')) { this.askOnce(); return 'perm'; }
+    const out = await Backup.build(); if (!out) return 'empty';
+    const fh = await h.getFileHandle(`دفتري ${ymd()}.daftari.json`, { create: true });
+    const w = await fh.createWritable(); await w.write(out.blob); await w.close();
+    const old = []; for await (const [nm, e] of h.entries()) if (e.kind === 'file' && this.NAME.test(nm)) old.push(nm);
+    for (const nm of old.sort().slice(0, -7)) await h.removeEntry(nm).catch(() => {});
+    Object.assign(c, { last: Date.now(), size: out.blob.size, sig, dir: h.name }); Settings.save();
+    return 'ok';
+  },
+  // بعد إعادة تشغيل المتصفح ممكن يطلب الإذن مرة ثانية: ضغطة وحدة باليوم
+  askOnce() {
+    if (this._asked) return; this._asked = true;
+    Toast.show({ icon: 'download', title: 'النسخ الاحتياطي التلقائي بدّه موافقتك', text: `ليكمّل يحفظ بمجلد «${this.c.dir || ''}».`, timeout: 15000, actions: [{ label: 'لاحقاً' }, { label: 'اسمح', primary: true, act: () => this.run(true, true).then(r => { if (r === 'ok') Toast.show({ icon: 'check', text: 'انحفظت نسخة اليوم ✓', timeout: 2500 }); }) }] });
+  },
+  noteManual() { this.c.last = Date.now(); Settings.save(); },
+  // بدون مجلد: كل أسبوع تذكير (بس إذا في كتب)
+  async remind() {
+    const c = this.c, ref = c.last || c.since || Date.now();
+    if (Date.now() - ref < 7 * 864e5 || c.remindAt && Date.now() - c.remindAt < 864e5) return 'wait';
+    if (!(await DB.all('books')).length || Tour.active) return 'empty';
+    c.remindAt = Date.now(); Settings.save();
+    Toast.show({ icon: 'download', title: 'صار إلك فترة بدون نسخة احتياطية', text: 'كتبك محفوظة بالمتصفح بس. نسخة على جهازك بتحميها لو انمسح المتصفح.', timeout: 15000, actions: [{ label: 'لاحقاً' }, this.can ? { label: 'نسخ تلقائي لمجلد', primary: true, act: () => this.pick() } : { label: 'نزّل نسخة', primary: true, act: () => Backup.exportBooks() }] });
+    return 'reminded';
+  },
+  status() {
+    const c = this.c;
+    if (!this.can) return c.last ? `آخر نسخة: ${ago(c.last)}` : 'ما في نسخة لسا';
+    if (!c.on) return 'مطفي — كتبك محفوظة بالمتصفح بس';
+    return `شغّال على مجلد «${esc(c.dir || '')}»` + (c.last ? ` · آخر نسخة ${ago(c.last)} (${fmtSize(c.size || 0)})` : '');
+  },
 };
 
 /* ============ التذكيرات: الطالب بيعملها بنفسه ============ */
@@ -455,11 +532,20 @@ function downloadBlob(blob, name) {
 }
 const Backup = {
   async exportBooks(ids = null) {
+    const close = Toast.show({ icon: 'download', text: 'جاري تجهيز النسخة الاحتياطية…', timeout: 0 });
+    const out = await this.build(ids);
+    close();
+    if (!out) { Toast.show({ icon: 'books', text: 'لا توجد كتب للحفظ' }); return; }
+    downloadBlob(out.blob, (out.books.length === 1 ? out.books[0].title : 'مكتبة دفتري') + ' ' + new Date().toISOString().slice(0, 10) + '.daftari.json');
+    Toast.show({ icon: 'download', text: 'حُفظت النسخة في مجلد التنزيلات (Downloads)', timeout: 4000 });
+    if (!ids) AutoBackup.noteManual();
+  },
+  // ملف النسخة (نفس الملف للتنزيل وللنسخ التلقائي)
+  async build(ids = null) {
     Editor.flushAll();
     const all = await DB.all('books');
     const books = ids ? all.filter(b => ids.includes(b.id)) : all;
-    if (!books.length) { Toast.show({ icon: 'books', text: 'لا توجد كتب للحفظ' }); return; }
-    const close = Toast.show({ icon: 'download', text: 'جاري تجهيز النسخة الاحتياطية…', timeout: 0 });
+    if (!books.length) return null;
     const pages = [], ids2 = new Set();
     for (const b of books) {
       const ps = (await DB.getMany('pages', b.pageIds || [])).filter(Boolean);
@@ -474,10 +560,9 @@ const Backup = {
     const plans = ids ? [] : await DB.all('plans');
     const blobs = [];
     for (const id of ids2) { const r = await DB.get('blobs', id); if (r) blobs.push({ id, type: r.type, data: await blobToDataURL(r.blob) }); }
-    const out = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pages.some(p => p.id === x.a) && pages.some(p => p.id === x.b)), exams: (await DB.all('exams')).filter(x => books.some(b => b.id === x.bookId)), subjects, files, plans })], { type: 'application/json' });
-    close();
-    downloadBlob(out, (books.length === 1 ? books[0].title : 'مكتبة دفتري') + ' ' + new Date().toISOString().slice(0, 10) + '.daftari.json');
-    Toast.show({ icon: 'download', text: 'حُفظت النسخة في مجلد التنزيلات (Downloads)', timeout: 4000 });
+    const pids = new Set(pages.map(p => p.id));
+    const blob = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pids.has(x.a) && pids.has(x.b)), exams: (await DB.all('exams')).filter(x => books.some(b => b.id === x.bookId)), subjects, files, plans })], { type: 'application/json' });
+    return { blob, books };
   },
   async importFile() {
     const f = await pickFile('.json,application/json');

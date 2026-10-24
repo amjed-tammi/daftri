@@ -24,11 +24,18 @@ export function runStatic(ROOT) {
     const missing = scripts.filter(s => !fs.existsSync(path.join(APP, s)));
     if (missing.length) fail('ناقص: ' + missing.join(', '));
     const used = new Set(scripts.map(s => path.basename(s)));
+    // ملفات بتتحمّل وقت الحاجة (Lazy.files بـ core.js): مستعملة، بس ما لازم تكون كمان بـ index.html
+    const lazy = [...(src['core.js'] || '').matchAll(/'js\/([a-z0-9-]+\.js)'/g)].map(m => m[1]);
+    const twice = lazy.filter(f => used.has(f));
+    if (twice.length) fail('بيتحمّل مرتين (بـ index.html ووقت الحاجة): ' + twice.join(', '));
+    const lazyMissing = lazy.filter(f => !files.includes(f));
+    if (lazyMissing.length) fail('ملف وقت الحاجة مش موجود: ' + lazyMissing.join(', '));
+    lazy.forEach(f => used.add(f));
     const orphan = files.filter(f => !used.has(f));
     if (orphan.length) fail('ملفات مش مربوطة: ' + orphan.join(', '));
     const dup = scripts.filter((s, i) => scripts.indexOf(s) !== i);
     if (dup.length) fail('مكرر: ' + dup.join(', '));
-    return `${scripts.length} ملف`;
+    return `${scripts.length} ملف مع الإقلاع + ${lazy.length} وقت الحاجة`;
   });
 
   // التعريفات العامة لكل ملف (مصدر واحد للحقيقة: كل اسم معرّف بمكان واحد)
@@ -137,7 +144,11 @@ export function runStatic(ROOT) {
     if (/<link[^>]+href="https?:/i.test(html)) ext.push('link خارجي');
     if (/@import\s+url\(\s*['"]?https?:/i.test(css) || /url\(\s*['"]?https?:/i.test(css)) ext.push('CSS خارجي');
     for (const [f, s] of Object.entries(code)) if (/fetch\(\s*['"`]https?:/.test(s) || /new\s+WebSocket\(/.test(s)) ext.push('اتصال خارجي بـ ' + f);
+    // أي عنوان إنترنت بالكود لازم يكون من القائمة: أوقات الصلاة (اختياري، بيتخزّن للشهر) وتضمين يوتيوب لروابط المستخدم
+    const ALLOWED = ['api.aladhan.com', 'www.youtube.com'];
+    for (const [f, s] of Object.entries(code)) for (const m of s.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)) if (!ALLOWED.includes(m[1].toLowerCase())) ext.push(`${m[1]} ← ${f}`);
     if (ext.length) fail(ext.join(', '));
+    return 'خدمات مسموحة بس: ' + ALLOWED.join('، ');
   });
 
   T('أمان: ما في eval ولا new Function، وكل ملف strict', () => {

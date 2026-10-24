@@ -79,6 +79,7 @@ const SUITE = {
     const paste = (target, data) => { const dt = new DataTransfer(); for (const [k, v] of Object.entries(data)) dt.setData(k, v); target.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); };
     const allHtml = () => Reader.pages.map(p => p.html).join('\n');
 
+    await Lazy.need('importer'); // قارئ الملفات بيتحمّل وقت الحاجة
     const b = await T.makeBook('كتاب الاستيراد', { htmls: ['<p>صفحتي الأولى</p>', '', '', ''] });
     await Reader.open(b.id, 0); await T.sleep(700); T.quiet();
     const live = () => Editor.live.get(Editor.curPage) || Editor.live.get(0);
@@ -145,8 +146,10 @@ const SUITE = {
       expect(h).toContain('style="text-align:center">سطر بالوسط');
       expect(h).toContain('style="text-align:left">English line');
       expect(/color:#000000/.test(h), 'الأسود لازم يروح (عشان الورق الأسود)').toBeFalsy();
-      expect(h).toContain('<ul><li>التطبيقات<ul><li>HTTP</li></ul></li><li>النقل</li></ul>');
-      expect(h).toContain('<ol><li>الخطوة الأولى</li><li>الخطوة الثانية</li></ol>');
+      const imported = document.createElement('div'); imported.innerHTML = h;
+      const layers = [...imported.querySelectorAll('ul')].find(x => x.textContent === 'التطبيقاتHTTPالنقل');
+      expect(layers.querySelector('li > ul > li').textContent).toBe('HTTP');
+      expect([...imported.querySelector('ol').children].map(x => x.textContent)).toEqual(['الخطوة الأولى', 'الخطوة الثانية']);
       expect(h).toContain('rowspan="2"');
       expect(h).toContain('colspan="2" style="background-color:#fff2cc"');
       expect(h).toContain('href="https://example.com/osi"');
@@ -176,8 +179,8 @@ const SUITE = {
       const f = await xlsx();
       const parsed = await Import.parse(f);
       const h = parsed.blocks.join('');
-      expect(h).toContain('<h3>الدرجات</h3>');
-      expect(h).toContain('<h3>Notes</h3>');
+      expect(h).toContain('<h2>الدرجات</h2>');
+      expect(h).toContain('<h2>Notes</h2>');
       expect(h).toContain('dir="rtl"');
       expect(h).toContain('2026-10-22');
       expect(h).toContain('91.75%');
@@ -196,6 +199,43 @@ const SUITE = {
       await T.sleep(500);
       const tables = [...Editor.live.values()].reduce((n, x) => n + x.c.querySelectorAll('table').length, 0);
       expect(tables).toBeGreaterThan(before);
+    });
+    await T.test('شيت عريض حقيقي الشكل (عنوان + ملخص + 20 عمود ونص طويل): بطاقات مرتبة، وما في صفحة طافحة', async () => {
+      const head = ['Date', 'Day', 'Week', 'Phase', 'Main Goal', 'Task 1', 'Task 1 Hours', 'Task 1 Status', 'Task 2', 'Task 2 Hours', 'Task 2 Status', 'Topic', 'Concepts to Learn', 'Resource', 'Notes', 'Readiness', 'Role', 'Gate', 'Quiz', 'Blocker'];
+      const C = (v, extra = {}) => ({ v, ...extra });
+      const grid = [
+        [C('Daily Plan — Backend + Data + AI | 2026-08-28 → 2026-12-31')],
+        [C('Start Date'), C('2026-08-28'), C('End Date'), C('2026-12-31'), C('Working Days'), C('108'), C('Overall'), C('0%')],
+        [C('Task Status'), C('Not Started → Done'), , , C('Mastery'), C('Self-score 0–5')],
+        [C('Readiness gates are evidence checkpoints — never automatic claims. Friday is REST; adjust future days only.')],
+        [],
+        head.map(h => C(h)),
+        ...Array.from({ length: 30 }, (_, i) => head.map((h, c) => C(c === 0 ? `2026-09-${String(i + 1).padStart(2, '0')}` : c === 1 ? 'Monday' : c === 2 ? `Week ${1 + (i / 7 | 0)}` : /Hours/.test(h) ? '1.5' : /Status/.test(h) ? 'Not Started' : `${h} ${i + 1}: ` + 'ابنِ واختبر وثّق الخطوة بالتفصيل مع أمثلة عملية واضحة. '.repeat(c % 3 + 1)))),
+      ];
+      const sheets = [{ name: 'Plan', grid, merges: [{ r0: 0, c0: 0, r1: 0, c1: 19 }], rtl: false }];
+      expect(Sheets.wide(sheets)).toBeTruthy();
+      const blocks = Sheets.blocks(sheets), h = blocks.join('');
+      expect(blocks[0]).toBe('<h2>Daily Plan — Backend + Data + AI | 2026-08-28 → 2026-12-31</h2>');
+      expect(h).toContain('<tr><th>Start Date</th><td>2026-08-28</td></tr>');
+      expect(h).toContain('<tr><th>Task Status</th><td>Not Started → Done</td></tr>');
+      expect(h).toContain('<p>Readiness gates are evidence checkpoints');
+      expect(h).toContain('<h3>2026-09-01 · Monday</h3>');
+      // «Task 1 Hours/Status» مع «Task 1» بسطر واحد
+      expect(h).toContain('<b>Task 1:</b> Task 1 1: ');
+      expect(h).toContain('<i>(Hours 1.5 · Status Not Started)</i>');
+      expect(/<b>Task 1 Hours:<\/b>/.test(h), 'العمود التابع لحاله').toBeFalsy();
+      const pages = Import.paginate(live(), blocks);
+      const txt = pages.map(p => p.html).join('');
+      const idx = Array.from({ length: 30 }, (_, i) => txt.indexOf(`<h3>2026-09-${String(i + 1).padStart(2, '0')} · Monday</h3>`));
+      expect(idx.every((x, k) => x > 0 && (k === 0 || x > idx[k - 1])), 'ترتيب الأيام').toBeTruthy();
+      // كل صفحة بحدها (قبل كان في حد 300 قطعة بيخلّي الصفحة الأولى تطفح)
+      const l = live(), saved = l.c.innerHTML; const lim = l.c.clientHeight; let over = 0;
+      for (const p of pages) { l.c.innerHTML = p.html; if (l.c.scrollHeight > lim + 2) over++; }
+      l.c.innerHTML = saved;
+      expect(over, 'صفحات طافحة').toBe(0);
+      T.info({ pages: pages.length });
+      // «جدول كامل»: جدول عريض بخط أصغر
+      expect(Sheets.blocks(sheets, 'table').join('')).toContain('class="tbl tbl-wide"');
     });
     await T.test('CSV عربي قديم (windows-1256) بفاصلة منقوطة بينقرأ صح', async () => {
       // «مرحبا;سلام» بترميز ويندوز العربي

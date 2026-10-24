@@ -27,7 +27,7 @@ const SUITE = {
           r.onerror = rej;
         });
         const d = await DB.open();
-        expect(d.version).toBe(5);
+        expect(d.version >= 5, 'نسخة القاعدة بعد الترقية').toBeTruthy();
         for (const s of ['subjects', 'files', 'plans']) expect(d.objectStoreNames.contains(s), 'مخزن ' + s).toBeTruthy();
         const old = await DB.get('books', 'kOld');
         expect(old.subjectId).toBe(NO_SUBJECT);

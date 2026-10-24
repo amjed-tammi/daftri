@@ -8,7 +8,7 @@ const SUITE = {
     });
     await T.test('قاعدة البيانات بتفتح بالنسخة الحالية وكل المخازن موجودة', async () => {
       const d = await DB.open();
-      T.expect(d.version).toBe(5);
+      T.expect(d.version >= 6, 'نسخة القاعدة').toBeTruthy();
       for (const s of ['books', 'pages', 'blobs', 'trash', 'cards', 'journal', 'links', 'exams', 'subjects', 'files', 'plans']) T.expect(d.objectStoreNames.contains(s), 'مخزن ' + s).toBeTruthy();
     });
     await T.test('الجولة التعريفية بتبدأ لحالها أول مرة', async () => {

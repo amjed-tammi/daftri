@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runStatic } from './static.mjs';
+import http from 'node:http';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -27,20 +28,35 @@ function findBrowser() {
   return c.find(p => p && fs.existsSync(p));
 }
 
+// سيرفر محلي صغير (زي GitHub Pages) للمجموعات اللي بدها http: عامل الخدمة والتثبيت ما بيشتغلوا من file://
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+function serveApp() {
+  return new Promise(res => {
+    const srv = http.createServer((req, rsp) => {
+      const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+      const f = path.join(ROOT, 'app', u.endsWith('/') ? u + 'index.html' : u);
+      if (!f.startsWith(path.join(ROOT, 'app')) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { rsp.writeHead(404); rsp.end(); return; }
+      rsp.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+      fs.createReadStream(f).pipe(rsp);
+    });
+    srv.listen(0, '127.0.0.1', () => res(srv));
+  });
+}
+
 class Browser {
   constructor(port, prof) { this.port = port; this.prof = prof; this.id = 0; this.pend = new Map(); this.errors = []; this.rpc = null; }
-  async start() {
+  async start(url = APP) {
     const exe = findBrowser();
     if (!exe) throw new Error('لم أجد Edge أو Chrome');
     this.proc = spawn(exe, ['--headless=new', ...(process.env.DAFTARI_NO_GPU ? ['--disable-gpu'] : []), '--no-first-run', '--no-default-browser-check',
       '--remote-debugging-port=0', `--user-data-dir=${this.prof}`, '--window-size=1366,800',
-      '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', APP], { stdio: 'ignore' });
+      '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', url], { stdio: 'ignore' });
     let t;
     for (let i = 0; i < 60 && !t; i++) {
       await sleep(250);
       // المنفذ بيختاره المتصفح نفسه (0) حتى ما نتصل بالغلط بمتصفح قديم عالق من تشغيل سابق
       try { this.port = +fs.readFileSync(path.join(this.prof, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0]; } catch { continue; }
-      try { t = (await (await fetch(`http://127.0.0.1:${this.port}/json`)).json()).find(x => x.type === 'page' && x.url.startsWith('file:')); } catch { }
+      try { t = (await (await fetch(`http://127.0.0.1:${this.port}/json`)).json()).find(x => x.type === 'page' && /^(file|http):/.test(x.url)); } catch { }
     }
     if (!t) throw new Error('ما قدرت أتصل بالمتصفح');
     this.ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -93,6 +109,15 @@ class Browser {
         await this.send('HeapProfiler.collectGarbage');
       } else if (cmd === 'metrics') {
         res = (await this.send('Performance.getMetrics')).result?.metrics;
+      } else if (cmd === 'server') {
+        // تشغيل/إطفاء السيرفر (= فصل الإنترنت) لاختبار الشغل بدون إنترنت
+        if (args.on === false && this.srv) { await new Promise(r => { this.srv.closeAllConnections && this.srv.closeAllConnections(); this.srv.close(() => r()); }); this.srvPort = this.srv.address && this.srv.address() ? this.srv.address().port : this.srvPort; }
+        res = true;
+      } else if (cmd === 'installability') {
+        res = (await this.send('Page.getInstallabilityErrors')).result?.installabilityErrors || null;
+      } else if (cmd === 'manifest') {
+        const r = (await this.send('Page.getAppManifest')).result || {};
+        res = { url: r.url, errors: r.errors, ok: !!r.data };
       } else if (cmd === 'fixture') {
         // ملفات حقيقية للاختبار (file:// ما بيسمح بـ fetch)
         res = fs.readFileSync(path.join(HERE, 'fixtures', path.basename(args.name))).toString('base64');
@@ -126,7 +151,9 @@ async function runSuite(file, idx) {
   const out = { name, tests: [], errors: [], ms: 0 };
   const t0 = Date.now();
   try {
-    await b.start();
+    // مجموعة فيها http: true بتنفتح من سيرفر محلي بدل file://
+    if (/\bhttp:\s*true\b/.test(code)) { b.srv = await serveApp(); await b.start(`http://127.0.0.1:${b.srv.address().port}/index.html`); }
+    else await b.start();
     await b.send('Performance.enable');
     const phases = await b.eval(`(()=>{ ${code}; return SUITE.phases.length; })()`);
     for (let ph = 0; ph < phases; ph++) {
@@ -137,7 +164,7 @@ async function runSuite(file, idx) {
       if (b.errors.length) { out.errors.push(...b.errors.map(e => `[مرحلة ${ph + 1}] ${e}`)); b.errors = []; }
     }
   } catch (e) { out.tests.push({ name: 'تشغيل المجموعة', ok: false, err: e.message, ms: 0 }); }
-  finally { await b.close(); await sleep(500); try { fs.rmSync(prof, { recursive: true, force: true }); } catch { } }
+  finally { if (b.srv) try { b.srv.close(); } catch { } await b.close(); await sleep(500); try { fs.rmSync(prof, { recursive: true, force: true }); } catch { } }
   out.ms = Date.now() - t0;
   // أي خطأ بالكونسول بيعتبر فشل (إلا اللي الاختبار نفسه سبّبه عن قصد)
   const real = out.errors.filter(e => !/__expected__/.test(e));

@@ -134,6 +134,8 @@ select option { background: #13244d; color: var(--tx); }
 .modal-back.in .modal { transform: none; }
 .modal.wide { width: 780px; }
 .modal.sm { width: 420px; }
+.modal-close-row { display: flex; justify-content: flex-end; margin-block-end: 12px; }
+.modal.palette-modal > .modal-close-row { padding: 10px 14px 0; margin-block-end: 0; }
 .bookform { display: grid; grid-template-columns: 220px 1fr; gap: 30px; }
 .bf-preview { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 30px; }
 .bf-cover { position: relative; width: 200px; height: 283px; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .5)); transition: transform .3s; }
@@ -252,6 +254,7 @@ details.more-opts > :not(summary) { margin-top: 14px; }
 .content h2 { font-size: calc(var(--fs) * 1.42); line-height: var(--lh); margin: 0; font-weight: 700; }
 .content h3 { font-size: calc(var(--fs) * 1.18); line-height: var(--lh); margin: 0; font-weight: 700; opacity: .92; }
 .content ul, .content ol { margin: 0; padding-inline-start: 1.5em; }
+.content ul, .content ol { padding-inline-end: 1.5em; }
 .content blockquote { margin: 0; padding-inline-start: 14px; border-inline-start: 3px solid rgba(180, 140, 60, .6); font-style: italic; opacity: .9; }
 .content a { color: #2c58cc; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer; }
 .content a.plink { color: #8a4b12; text-decoration-style: dashed; }
@@ -1012,7 +1015,7 @@ body.fmt-docked #navbar, body.fmt-docked .reviewbar { bottom: 68px; }
 .pdf-s { font-size: 11.5px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pdf-more { position: absolute; top: 4px; right: 26px; width: 30px; height: 30px; background: rgba(5, 10, 28, .7); opacity: 0; transition: opacity .2s; }
 .pdf-card:hover .pdf-more, .pdf-card:focus-within .pdf-more { opacity: 1; }
-.modal.pdf-modal { width: min(1100px, 96vw); height: calc(100vh - 40px); padding: 0; display: flex; overflow: hidden; }
+.modal.pdf-modal { width: min(1500px, 98vw); height: calc(100vh - 20px); padding: 0; display: flex; overflow: hidden; }
 .pdfv { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .pdfv-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--glass-b); }
 .pdfv-top > .ic { color: var(--gold); }
@@ -1126,3 +1129,133 @@ body.fmt-docked #navbar, body.fmt-docked .reviewbar { bottom: 68px; }
 .imp-opt.rec { border-color: rgba(232, 199, 122, .55); background: rgba(232, 199, 122, .12); }
 .imp-opt.rec .ic { color: #f7e5b0; }
 .imp-opt:disabled { opacity: .45; cursor: not-allowed; }
+.imp-mode { display: flex; gap: 6px; padding: 4px; border-radius: 13px; background: rgba(255, 255, 255, .05); }
+.imp-mode button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; border: 0; border-radius: 10px; background: none; color: var(--mut); font: 13.5px var(--ui); cursor: pointer; }
+.imp-mode button .ic { width: 16px; height: 16px; }
+.imp-mode button.on { background: rgba(232, 199, 122, .18); color: #f7e5b0; }
+/* وإنت عم تقرأ PDF: الرسائل بتنزل لتحت حتى ما تغطي أزرار العارض */
+body:has(.pdf-modal) #toasts { top: auto; bottom: 18px; }
+/* جدول عريض (من إكسل): خط أصغر والكلمات ما بتتكسّر حرف حرف */
+.content table.tbl-wide { font-size: 10.5px; line-height: 1.35; }
+.content table.tbl-wide th, .content table.tbl-wide td { padding: 2px 3px; word-break: normal; overflow-wrap: anywhere; min-width: 34px; }
+
+/* ===== «كمّل من وين وقفت» ===== */
+.continue-card { display: flex; align-items: center; gap: 14px; width: min(560px, 100%); margin: 0 0 22px; padding: 12px 16px; border-radius: 18px; border: 1px solid rgba(232, 199, 122, .35); background: linear-gradient(135deg, rgba(232, 199, 122, .14), rgba(255, 255, 255, .03)); color: var(--tx); font: 14px var(--ui); text-align: start; cursor: pointer; transition: transform .2s cubic-bezier(.2, .8, .2, 1), background .2s; }
+.continue-card:hover, .continue-card:focus-visible { transform: translateY(-2px); background: linear-gradient(135deg, rgba(232, 199, 122, .22), rgba(255, 255, 255, .05)); outline: 0; }
+.continue-card:active { transform: scale(.985); }
+.cc-cover { flex: none; width: 38px; height: 50px; border-radius: 4px 8px 8px 4px; background: var(--cv); box-shadow: inset 3px 0 0 rgba(0, 0, 0, .25), 0 4px 12px rgba(0, 0, 0, .35); }
+.cc-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.cc-txt small { color: #f7e5b0; font-size: 11.5px; }
+.cc-txt b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-txt span { color: var(--mut); font-size: 12px; }
+.cc-go { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 11px; background: var(--gold, #e8c77a); color: #1d1607; font-weight: 700; }
+.cc-go .ic { width: 16px; height: 16px; }
+
+/* ===== إعدادات: كتلة النسخ الاحتياطي ===== */
+.st-block { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; margin: 2px 0 10px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid var(--glass-b); }
+.st-block > b { display: flex; align-items: center; gap: 7px; }
+.st-block > b .ic { width: 17px; height: 17px; color: #f7e5b0; }
+.st-block p { margin: 0; }
+
+/* ===== الوضع الخفيف: أجهزة قديمة وبطارية — بدون ضبابية ولا حركة مستمرة (التقليب نفسه بيضل) ===== */
+body.lite *, body.lite *::before, body.lite *::after { animation: none !important; transition-duration: 0s !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body.lite #twinkles, body.lite .moon { display: none; }
+body.lite .modal-back { background: rgba(2, 6, 18, .86); }
+body.lite .bar, body.lite .toast, body.lite .selbar, body.lite .pop { background: #13244d; }
+body.lite .modal { box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+
+/* ===== أول تشغيل: «شو بتعمل؟» ===== */
+.modal.onboard-modal { width: 760px; }
+.onboard h3 { margin: 18px 0 10px; }
+.ob-hello { display: flex; align-items: center; gap: 14px; }
+.ob-hello h2 { margin: 0 0 4px; font-size: 24px; }
+.ob-hello p { margin: 0; }
+.ob-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ob-card { display: grid; grid-template-columns: 44px 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; text-align: start; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--glass-b); background: rgba(255, 255, 255, .04); color: var(--tx); font: 14px var(--ui); cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+.ob-card:hover, .ob-card:focus-visible { background: rgba(232, 199, 122, .1); border-color: rgba(232, 199, 122, .5); transform: translateY(-1px); outline: 0; }
+.ob-card .ob-ic { grid-row: span 2; font-size: 30px; line-height: 1; text-align: center; }
+.ob-card b { font-size: 16px; }
+.ob-card span:last-child { color: var(--mut); font-size: 12.5px; line-height: 1.6; }
+.ob-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.ob-chip { height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--glass-b); background: rgba(255, 255, 255, .03); color: var(--mut); font: 14px var(--ui); cursor: pointer; }
+.ob-chip.on { background: rgba(232, 199, 122, .16); border-color: rgba(232, 199, 122, .55); color: #f7e5b0; }
+.ob-chip.on::before { content: '✓ '; }
+.ob-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.ob-add .inp { flex: 1; }
+.ob-stream, .ob-paper { margin-bottom: 4px; }
+@media (max-width: 640px) { .ob-cards { grid-template-columns: 1fr; } }
+
+/* الكاتب (أو اللي طفّى أدوات الدراسة): شريط أنظف */
+body.no-study #tbReview, body.no-study #tbExam, body.no-study #tbWeb { display: none; }
+/* عدّ تنازلي للامتحان */
+.ts-exam { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid rgba(232, 199, 122, .45); background: rgba(232, 199, 122, .12); color: #f7e5b0; font: 13.5px var(--ui); cursor: pointer; white-space: nowrap; }
+.ts-exam b { color: #fff3cf; }
+.today-strip.calm { animation: none; }
+
+/* ===== شاشة ضيقة (موبايل/تابلت عمودي): صفحة وحدة بعرض الشاشة ===== */
+body.narrow #book { transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
+body.narrow .peek { pointer-events: auto; height: 6px; width: 64px; }
+.modal.wide, .modal.onboard-modal { width: min(780px, 100%); }
+.modal.import-modal { width: min(520px, 100%); }
+@media (max-width: 640px) {
+  .modal { padding: 18px 16px; border-radius: 18px; }
+  .modal-back { padding: 8px; }
+}
+body.narrow .selbar.docked { max-width: calc(100vw - 12px); overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+body.narrow .selbar.docked::-webkit-scrollbar { display: none; }
+body.narrow #topbar .tb-title, body.narrow #topbar .tb-sep { display: none; }
+body.narrow #topbar { gap: 2px; padding: 4px; max-width: calc(100vw - 8px); }
+body.narrow #topbar .ib, body.narrow #topbar .tbtn { width: 34px; min-width: 34px; height: 34px; padding: 0; justify-content: center; }
+body.narrow #topbar .tb-cluster { padding: 1px; }
+body.narrow #rope { top: 52px; }
+
+/* ===== ورقة ليلة الامتحان ===== */
+.modal.sheet-modal { width: min(900px, 100%); }
+.sheet-dlg { display: flex; flex-direction: column; gap: 12px; }
+.sh-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px; }
+.sh-opts label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.sheet-paper { max-height: 56vh; overflow: auto; padding: 22px 24px; border-radius: 10px; background: #fbf7ec; color: #1d2340; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
+.sh-empty { padding: 14px 18px; border-radius: 12px; background: rgba(255, 255, 255, .04); }
+.sh-empty ul { margin: 6px 0 0; padding-inline-start: 20px; line-height: 1.9; }
+.sh-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 2px solid #c9a24a; }
+.sh-head b { font-size: 18px; }
+.sh-head span { font-size: 12px; color: #6a6f85; }
+.sh-wrong { margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; background: #fde8e6; border: 1px solid #f2b8b2; }
+.sh-wrong h4 { margin: 0 0 4px; font-size: 13.5px; color: #9b2c22; }
+.sh-wrong ol { margin: 0; padding-inline-start: 20px; font-size: 13px; line-height: 1.7; }
+.sh-cols { columns: 2 260px; column-gap: 22px; column-rule: 1px solid #e3dccb; }
+.sh-sec { break-inside: avoid-column; margin-bottom: 12px; }
+.sh-sec h3 { margin: 0 0 4px; font-size: 14.5px; color: #1f3a7a; border-bottom: 1px solid #e3dccb; padding-bottom: 2px; }
+.sh-sec ul { list-style: none; margin: 0; padding: 0; font-size: 12.5px; line-height: 1.65; }
+.sh-sec li { margin: 2px 0; }
+.sh-hl { padding-inline-start: 10px; border-inline-start: 3px solid #f2d14f; }
+.sh-card u { text-decoration: none; border-bottom: 1px dashed #8a8fa5; }
+.sh-sub { font-weight: 700; color: #4a5070; margin-top: 4px !important; }
+.sh-terms { margin: 0 0 4px; font-size: 12px; color: #6a4a10; }
+.sh-p { font-style: normal; font-size: 10.5px; color: #8a8fa5; white-space: nowrap; }
+.sh-blank { display: inline-block; min-width: 70px; border-bottom: 1px solid #8a8fa5; height: 1em; vertical-align: bottom; }
+@media print {
+  #print .sheet-print { width: 210mm; min-height: 296mm; padding: 12mm 13mm; box-sizing: border-box; background: #fff; color: #111; font-family: var(--ui); direction: rtl; }
+  #print .sheet-print .sh-cols { columns: 2; }
+}
+/* لما شريط الأدوات فوق ظاهر: الرسائل بتنزل تحته بدل ما تغطي أزراره */
+#toasts { transition: top .2s ease; }
+/* (الشريط والقوائم بتنزل من فوق، فالرسائل بتروح لتحت فوق شريط التنسيق) */
+body:has(#topbar.show) #toasts, body:has(.pop) #toasts { top: auto; bottom: 84px; }
+/* وإنت بنافذة (ورقة، إعدادات، امتحان…): الرسائل تحت حتى ما تغطي عنوانها وأزرارها */
+body:has(.modal-back) #toasts { top: auto; bottom: 18px; }
+
+/* ===== أوقات الصلاة ===== */
+.pr-chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid rgba(143, 211, 255, .35); background: rgba(143, 211, 255, .08); color: var(--tx); font: 13.5px var(--ui); cursor: pointer; white-space: nowrap; }
+.pr-chip b { color: #cfeaff; }
+.pr-chip span { color: var(--mut); font-size: 12.5px; }
+.pr-panel { min-width: 240px; }
+.pr-panel h4 { margin: 0; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.pr-panel h4 small { color: var(--mut); font-weight: 400; }
+.pr-panel ul { list-style: none; margin: 8px 0; padding: 0; }
+.pr-panel li { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 9px; }
+.pr-panel li.on { background: rgba(143, 211, 255, .14); color: #cfeaff; font-weight: 700; }
+.pr-panel li.sun { color: var(--mut); font-size: 13px; }
+.pr-set { display: flex; flex-direction: column; gap: 8px; }
+.pr-set .row { gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.pr-set .fld { flex: 1; min-width: 160px; }

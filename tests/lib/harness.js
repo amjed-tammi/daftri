@@ -50,6 +50,8 @@ const __T = (() => {
     ['lib', 'book'].forEach(n => { localStorage.setItem('tour-' + n, '1'); localStorage.setItem('tourv-' + n, String(typeof TOUR_V !== 'undefined' ? TOUR_V : 99)); });
     if (typeof Tour !== 'undefined' && Tour.active) Tour.end(false);
     document.querySelectorAll('.toast').forEach(t => t.remove());
+    // سؤال أول تشغيل («شو بتعمل؟») بيطلع مع الإقلاع: بنسكّره زي الجولة
+    if (!allowTour && typeof Settings !== 'undefined' && Settings.d.app && !Settings.d.app.profile) { Settings.set('profile', 'skip'); document.querySelectorAll('.modal-back').forEach(m => { if (m.querySelector('.onboard')) m.remove(); }); }
   };
   const clean = () => { if (!allowTour) document.querySelectorAll('.toast').forEach(t => t.remove()); if (typeof Pop !== 'undefined') Pop.close(); document.querySelectorAll('.modal-back').forEach(m => m.remove()); if (!allowTour && typeof Tour !== 'undefined' && Tour.active) Tour.end(false); };
   // كتاب جاهز للاختبار
@@ -74,6 +76,7 @@ const __T = (() => {
       shot: async name => { const p = await rpc('shot', { suite: suiteName, name }); if (cur) (cur.shots = cur.shots || []).push(p); return p; },
       viewport: async (w, h) => { await rpc('viewport', { w, h }); await sleep(350); },
       metrics: () => rpc('metrics'),
+      rpc, // أوامر خاصة للمتصفح (سيرفر، تثبيت…)
       // ملف حقيقي من tests/fixtures كـ File
       fixture: async (name, type = '') => { const b64 = await rpc('fixture', { name }); const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], name, { type }); },
       gc: () => rpc('gc'),

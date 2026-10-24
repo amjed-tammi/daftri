@@ -64,6 +64,19 @@ const Library = {
     const k = normTitle(b.series.name);
     return this.books.filter(x => x.series && normTitle(x.series.name) === k).sort((a, c) => a.series.part - c.series.part);
   },
+  // «كمّل من وين وقفت»: آخر كتاب فتحته وعلى أي صفحة، بضغطة وحدة
+  continueCard() {
+    const b = this.books.filter(x => x.opened).sort((a, c) => c.opened - a.opened)[0];
+    if (!b) return null;
+    const s = b.lastSpread != null ? b.lastSpread : -1;
+    const where = s < 0 ? 'على الغلاف' : `صفحة ${2 * s + 1}–${2 * s + 2}`;
+    const c = el(`<button class="continue-card" data-id="${b.id}" title="كمّل (Enter)">
+      <span class="cc-cover" style="--cv:${esc((b.cover && b.cover.color) || '#1d2b53')}"></span>
+      <span class="cc-txt"><small>كمّل من وين وقفت</small><b dir="auto">${esc(b.title)}</b><span>${where} · ${esc(ago(b.opened))}</span></span>
+      <span class="cc-go">${ic('open')} كمّل</span></button>`);
+    c.onclick = () => Reader.open(b.id);
+    return c;
+  },
   render() {
     const box = $('#shelves');
     box.innerHTML = '';
@@ -82,6 +95,7 @@ const Library = {
       return;
     }
     const strip = Cal.strip(); if (strip) box.append(strip);
+    if (!this.cur) { const cc = this.continueCard(); if (cc) box.append(cc); }
     const sid = this.cur || NO_SUBJECT;
     if (this.cur) box.append(Subjects.head(this.subject(this.cur)));
     else if (this.subjects.length) box.append(Subjects.grid());
@@ -269,7 +283,7 @@ const Library = {
         await DB.put('books', nb);
         m.close();
         await this.load();
-        Reader.open(nb.id);
+        Reader.open(nb.id).then(() => { if (!Tour.willRun('book') && Reader.book && Reader.book.id === nb.id && Reader.s < 0) setTimeout(() => { if (Reader.s < 0 && !Tour.active) Reader.turn(1).then(() => Editor.focusPage(0)); }, 650); });
       }
     };
     $('.bf-paper', f).append(PaperUI.make(d.paper, { preview: true }));

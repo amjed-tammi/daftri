@@ -26,14 +26,19 @@ const Cal = {
     $('#btnCal').classList.toggle('due', !!n);
     $('#btnCal').title = n ? `تقويم الدراسة — مطلوب اليوم: ${n}` : 'تقويم الدراسة';
   },
+  // أقرب امتحان جاي (مهمة معلّمة امتحان): للعدّ التنازلي
+  nextExam() { const t = ymd(); return this.plans.filter(p => p.exam && !p.done && p.date >= t).sort((a, b) => a.date < b.date ? -1 : 1)[0] || null; },
+  daysTo(date) { return Math.round((new Date(date + 'T00:00') - new Date(ymd() + 'T00:00')) / 864e5); },
   strip() {
-    const list = this.pendingToday();
-    if (!list.length) return null;
-    const s = el(`<div class="today-strip" role="region" aria-label="مطلوب اليوم">
-      <span class="ts-dot" aria-hidden="true"></span><b>مطلوب اليوم</b>
-      <div class="ts-items">${list.slice(0, 4).map(p => `<button class="ts-chip" data-pid="${p.id}" dir="auto">${esc(p.title)}</button>`).join('')}${list.length > 4 ? `<span class="muted sm">+${list.length - 4}</span>` : ''}</div>
+    const list = this.pendingToday(), ex = this.nextExam(), pr = Prayer.chipHTML();
+    if (!list.length && !ex && !pr) return null;
+    const d = ex && this.daysTo(ex.date);
+    const cd = ex ? `<button class="ts-exam" data-date="${ex.date}" title="${esc(ex.date)}">🎯 ${d === 0 ? `<b>${esc(ex.title.replace(/^🎯\s*/, ''))} اليوم!</b> بالتوفيق ✦` : `باقي <b>${d}</b> ${d === 1 ? 'يوم' : d <= 10 ? 'أيام' : 'يوم'} على ${esc(ex.title.replace(/^🎯\s*/, ''))}`}</button>` : '';
+    const s = el(`<div class="today-strip ${list.length ? '' : 'calm'}" role="region" aria-label="مطلوب اليوم">
+      ${pr}${cd}${list.length ? `<span class="ts-dot" aria-hidden="true"></span><b>مطلوب اليوم</b>
+      <div class="ts-items">${list.slice(0, 4).map(p => `<button class="ts-chip" data-pid="${p.id}" dir="auto">${esc(p.title)}</button>`).join('')}${list.length > 4 ? `<span class="muted sm">+${list.length - 4}</span>` : ''}</div>` : '<span class="ts-items"></span>'}
       <button class="btn ghost sm" data-a="cal">${ic('calendar')} افتح التقويم</button></div>`);
-    s.addEventListener('click', e => { if (e.target.closest('[data-pid], [data-a=cal]')) this.open({ date: ymd() }); });
+    s.addEventListener('click', e => { const pc = e.target.closest('.pr-chip'); if (pc) { Prayer.panel(pc); return; } const x = e.target.closest('[data-date]'); if (x) { this.open({ date: x.dataset.date }); return; } if (e.target.closest('[data-pid], [data-a=cal]')) this.open({ date: ymd() }); });
     return s;
   },
   // رسالة لطيفة مرة باليوم لما يكون في شي مطلوب
@@ -113,6 +118,7 @@ const Cal = {
           <label class="fld"><span>اربطه بـ</span><select class="inp" name="link"></select></label>
         </div>
         <input class="inp" name="pages" dir="auto" maxlength="60" placeholder="الصفحات أو ملاحظة (مثلاً: ١٢–٢٠ أو 12-20)">
+        <label class="chk"><input type="checkbox" name="exam"> <span>🎯 هاد امتحان — بيطلع عدّ تنازلي إله بالمكتبة</span></label>
         <em class="err"></em>
         <button class="btn primary" type="submit">${ic('plus')} أضف</button>
       </form>`;
@@ -141,7 +147,7 @@ const Cal = {
     const go = p.fileId && ln ? `<button class="btn ghost sm" data-go="${p.id}" title="افتح الملف">${ic('attach')} PDF</button>` : p.bookId && ln ? `<button class="btn ghost sm" data-go="${p.id}" title="افتح الكتاب">${ic('open')} افتح</button>` : '';
     return `<div class="cal-task ${p.done ? 'is-done' : ''}" data-pid="${p.id}" style="--dc:${s ? s.color : '#8fb4ff'}">
       <label class="ct-chk" title="${p.done ? 'رجّعها مش مخلصة' : 'خلصت'}"><input type="checkbox" data-done="${p.id}" ${p.done ? 'checked' : ''}><span></span></label>
-      <div class="ct-t"><b dir="auto">${esc(p.title)}</b><small dir="auto">${[s && s.name, ln && ln !== p.title ? ln : '', p.pages].filter(Boolean).map(esc).join(' · ')}</small></div>
+      <div class="ct-t"><b dir="auto">${p.exam && !/🎯/.test(p.title) ? '🎯 ' : ''}${esc(p.title)}</b><small dir="auto">${[s && s.name, ln && ln !== p.title ? ln : '', p.pages].filter(Boolean).map(esc).join(' · ')}</small></div>
       ${go}<button class="ib" data-del="${p.id}" title="حذف المهمة">${ic('trash')}</button></div>`;
   },
   onClick(e, n, st, draw, m) {
@@ -173,12 +179,12 @@ const Cal = {
   async add(n, st, draw) {
     const F = $('.cal-add', n).elements;
     const [k, id] = (F.link.value || ':').split(':');
-    const p = { id: 't' + uid(), date: st.sel, title: F.title.value.trim(), subjectId: F.subject.value, bookId: k === 'b' ? id : null, fileId: k === 'f' ? id : null, pages: F.pages.value.trim(), done: false, created: Date.now() };
+    const p = { id: 't' + uid(), date: st.sel, title: F.title.value.trim(), subjectId: F.subject.value, bookId: k === 'b' ? id : null, fileId: k === 'f' ? id : null, pages: F.pages.value.trim(), exam: !!(F.exam && F.exam.checked), done: false, created: Date.now() };
     if (!p.title) p.title = this.linkName(p) || (p.subjectId !== NO_SUBJECT ? 'دراسة ' + Library.subjectName(p.subjectId) : '');
     if (!p.title) { $('.cal-add .err', n).textContent = 'اكتب شو بدك تدرس، أو اختر مادة أو كتاب'; F.title.focus(); return; }
     await DB.put('plans', p);
     this.plans.push(p);
-    F.title.value = ''; F.pages.value = ''; // المادة والربط بيضلوا لمهمة ثانية بنفس المادة
+    F.title.value = ''; F.pages.value = ''; if (F.exam) F.exam.checked = false; // المادة والربط بيضلوا لمهمة ثانية بنفس المادة
     draw();
     const fresh = $(`.cal-task[data-pid="${p.id}"]`, n); if (fresh) fresh.classList.add('new');
     const t = $('.cal-add input[name=title]', n); if (t) t.focus();

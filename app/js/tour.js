@@ -2,17 +2,20 @@
 /* ============ الجولة التعريفية: تعليم خطوة بخطوة مع إضاءة على كل جزء ============ */
 // رقم نسخة الجولة: كل ما انضافت ميزة جديدة بنزيده، والخطوات الجديدة بتاخذ since بنفس الرقم
 // (اللي شاف الجولة قبل بيطلعله «شوف الجديد» بالخطوات الجديدة بس)
-const TOUR_V = 7;
+const TOUR_V = 10;
 const TOURS = {
   lib: [
     { title: 'أهلاً فيك بدفتري 🌙', text: 'دفترك الهادئ للكتابة والدراسة: ورق حقيقي بتقلّبه، عربي وإنجليزي مع بعض، أسئلة مراجعة وامتحانات، ومؤقت بيساعدك تركّز. خلّيني آخذك جولة سريعة (دقيقتين).', center: true, first: true },
     { el: '#btnNew', title: 'أنشئ كتاب', text: 'كل مادة أو مشروع إله كتاب. بتختار اسمه (ما بيتكرر)، الغلاف، اتجاهه، ومن «إعدادات الكتاب» بنفس النافذة: الورق والخط والموسيقى والسلسلة — وكلهم بيبدأوا من إعداداتك الافتراضية.', since: 4 },
-    { el: '#shelves .shelf, #shelves .empty', title: 'رفوف مكتبتك', text: 'كتبك بتصير هون. لو ربطت كتب كأجزاء سلسلة (الجزء ١، ٢…) بيصيروا على رف خاص. ومن زر «⋯» على أي كتاب: تعديل، مشاركة، نسخة احتياطية، أو حذف (بيروح للسلة 30 يوم).', pad: 10 },
-    { el: '#shelves .shelf, #shelves .empty', title: 'من ملف لكتاب 📄', text: 'اسحب ملف Word أو Excel على المكتبة وبيصير كتاب جديد باسمه، بصفحات جاهزة وبنفس تنسيقه.', pad: 10, since: 7 },
+    { el: '#shelves .shelf .bk, #shelves .empty', title: 'رفوف مكتبتك', text: 'كتبك بتصير هون. لو ربطت كتب كأجزاء سلسلة (الجزء ١، ٢…) بيصيروا على رف خاص. ومن زر «⋯» على أي كتاب: تعديل، مشاركة، نسخة احتياطية، أو حذف (بيروح للسلة 30 يوم).', pad: 10 },
+    { el: '#shelves .shelf .bk, #shelves .empty', title: 'من ملف لكتاب 📄', text: 'اسحب ملف Word أو Excel على المكتبة وبيصير كتاب جديد باسمه، بصفحات جاهزة وبنفس تنسيقه.', pad: 10, since: 7 },
     { el: '#btnSubj', title: 'المواد 📚', text: 'رتّب دراستك بمواد: رياضيات، فيزياء، تاريخ… المكتبة بتعرض المواد أول شي، وكل مادة بتفتح على كتبها (وأجزاء السلاسل) وبتضيف كتاب جوّاها بضغطة. كتبك القديمة ما راحت: هي بـ«بدون مادة» وبتنقلها لأي مادة من «تعديل».', since: 6 },
     { el: '#btnCal', title: 'تقويم الدراسة 🗓', text: 'صفحة شهر كاملة: اضغط على أي يوم وضيف شو بدك تدرس (مادة، كتاب أو PDF، والصفحات). الأيام اللي فيها شي مطلوب بتلمع، واليوم بيطلعلك «مطلوب اليوم» بالمكتبة. ولما تخلّص كل مهام اليوم بتنضاف نجمة لسماك ✦', try: 'جرّب تضيف مهمة لبكرة', since: 6 },
     { el: '#btnSubj', title: 'ملفات PDF 📎', text: 'ارفع المحاضرات والسلايدات (أو اسحبها وأفلتها على المكتبة) وبتنحفظ جوّا دفتري، فبتفتحها بدون إنترنت بعارض خفيف. بتربطها بمادة أو بكتاب، وبتقدر تحطها بمهمة بالتقويم.', since: 6 },
     { el: '#btnSettings', title: 'الإعدادات ⚙', text: 'هون بتحدد الافتراضي لكل كتاب جديد: الورق، الخطوط، الحبر، الاتجاه، والموسيقى. وكمان إعدادات التطبيق مثل صوت التقليب وشريط التنسيق.', since: 4 },
+    { el: '#btnSettings', title: 'نسخة احتياطية لحالها 🛟', text: 'كتبك محفوظة جوّا المتصفح. من الإعدادات ← «التطبيق» اختار مجلد (مثلاً بـ OneDrive أو Google Drive) وكل يوم بتنحفظ نسخة لحالها. وفي «وضع خفيف» للأجهزة القديمة والبطارية.', since: 8 },
+    { el: '#btnSettings', title: 'أوقات الصلاة 🕌', text: 'من الإعدادات ← «التطبيق» شغّل أوقات الصلاة واختار مدينتك: بتشوف الصلاة الجاية وقديش باقي هون بالمكتبة، وبيذكّرك وقت الأذان — وإذا كنت بجلسة دراسة بيعرض يوقّفها لترجع تكمّل من نفس الدقيقة.', since: 10 },
+    { el: '#btnLibMore', title: 'دفتري على أي جهاز 📱💻', text: 'من «⋯» ← «ثبّت دفتري كتطبيق»: بيشتغل على ويندوز وماك ولينكس وأندرويد بدون إنترنت، وبيفتح ملفات .daftar بدبل كليك.', since: 8 },
     { el: '#btnLibMore', title: 'قائمة المزيد ⋯', text: 'البحث، يومياتك، فتح كتاب مشارَك (.daftar)، النسخ الاحتياطي، والسلة — مرتبين بمجموعات. وأول شي فيها «كل الأدوات»: Ctrl+/ بأي مكان، اكتب اسم الأداة عربي أو English وبتفتح.', try: 'جرّب Ctrl+/ هلق', since: 5 },
     { el: '#rope .knot', title: 'الحبل = جلسة دراسة', text: 'اسحب الحبل لتحت: كل ما سحبت أكثر زاد الوقت. وقت الجلسة الضوء بيخف حوالين الكتاب، وبآخرها بيسألك «شو تعلمت اليوم؟».', try: 'جرّب تسحبه شوي لتحت 👆', pad: 14 },
     { el: '#btnNight', title: 'تذكيراتك إنت ⏰', text: 'إنت اللي بتعمل تذكيراتك: اشرب مي، قوم تحرّك، راجع فصل… بتختار الأيقونة والوقت، وبتوقف أو بتحذف أي واحد. وفي اقتراحات جاهزة بضغطة.', pad: 8, since: 4 },
@@ -33,6 +36,7 @@ const TOURS = {
     { el: '#tbPaper', bar: true, title: 'إعدادات هالكتاب ⚙', text: 'الورق والخطوط والحبر، موسيقى الكتاب وإذا بتشتغل لحالها، اتجاه الكتاب، ومشاركته بملف .daftar.', since: 4 },
     { el: '#tbExam', bar: true, title: 'الامتحانات 📝', text: 'كل كتاب إله قسم امتحانات: اختيار من متعدد، وكل سؤال مربوط بصفحته. إذا غلطت بيقلك من أي صفحة السؤال وبيفتحلك ياها، وبترجع تكمّل الامتحان. وبتقدر تعمل امتحان من أي صفحة (كليك يمين) أو تقترح أسئلة من أسئلة المراجعة.', since: 4 },
     { el: '#tbReview', bar: true, title: 'المراجعة والامتحان', text: 'حدّد جواب واضغط 🩹 بيصير سؤال مراجعة. من هون بتبدأ مراجعة اليوم، أو بتشغّل «وضع الامتحان» اللي بيخبّي كل الأجوبة تحت شريط لاصق.' },
+    { el: '#tbReview', bar: true, title: 'ورقة ليلة الامتحان 📄', text: 'من «مراجعة» ← «ورقة ليلة الامتحان»: ملخص كتابك بصفحة وحدة — العناوين، اللي ظلّلته، أسئلة المراجعة وأجوبتها، والأسئلة اللي غلطت فيها. بتطبعها أو بتحفظها PDF، أو بتخبّي الأجوبة وبتسمّع لحالك.', since: 9 },
     { el: '#tbIndex', bar: true, title: 'الفهرس', text: 'كل العناوين اللي بتكتبها (زر H) بتظهر هون مع أرقام صفحاتها، وبتنقلك إلها بضغطة.' },
     { el: '#tbWeb', bar: true, title: 'شبكة الأفكار 🕸', text: 'اربط الصفحات اللي فكرتها مرتبطة ببعض (حتى مع كتب نفس السلسلة)، وشوفهم كشبكة عنكبوت. اسحب الخرزة الذهبية من صفحة لصفحة لتربطهم.' },
     { el: '#tbSearch', bar: true, title: 'البحث', text: 'Ctrl+F: دوّر بالكتاب أو بكل الكتب. البحث بيتجاهل التشكيل والهمزات، وبيلوّنلك الكلمة بالصفحة.' },
@@ -77,6 +81,16 @@ const Tour = {
     this._rs = debounce(() => this.place(), 100);
     document.addEventListener('keydown', this._key, true);
     addEventListener('resize', this._rs);
+    // بلّش يشتغل (كبس برا البطاقة أو بلّش يكتب)؟ الجولة بتنسحب بهدوء بدل ما تضل بنص الصفحة
+    this._out = e => {
+      if (!this.active || e.target.closest('.tour-card')) return;
+      const s = this.steps()[this.i], t = s && !s.center && this.target(s);
+      if (t && t.contains(e.target)) return; // «جرّب» على العنصر المضاء مسموح
+      this.dismiss();
+    };
+    this._type = e => { const a = document.activeElement; if (this.active && a && a.isContentEditable && e.key.length === 1) this.dismiss(); };
+    document.addEventListener('pointerdown', this._out, true);
+    document.addEventListener('keydown', this._type, true);
     this.show();
   },
   steps() { return this.list || TOURS[this.active] || []; },
@@ -109,7 +123,8 @@ const Tour = {
     card.onclick = e => {
       const b = e.target.closest('[data-t]'); if (!b) return;
       const t = b.dataset.t;
-      if (t === 'skip' || t === 'done') this.end();
+      if (t === 'skip') this.dismiss();
+      else if (t === 'done') this.end();
       else if (t === 'back') { this.i = Math.max(0, this.i - 1); this._back = true; this.show(); }
       else this.next();
     };
@@ -149,7 +164,12 @@ const Tour = {
       else if (!big && r.top - g - ch > 8) { y = r.top - g - ch; x = (r.left + r.right) / 2 - cw / 2; }
       else if (r.left - g - cw > 8) { x = r.left - g - cw; y = (r.top + r.bottom) / 2 - ch / 2; }
       else if (r.right + g + cw < innerWidth - 8) { x = r.right + g; y = (r.top + r.bottom) / 2 - ch / 2; }
-      else { x = (innerWidth - cw) / 2; y = innerHeight - ch - 24; }
+      else {
+        // ما في مكان فاضي كامل: منجرّب كذا مكان ومنختار اللي بيغطي أقل شي من الهدف
+        const cands = [[(innerWidth - cw) / 2, innerHeight - ch - 16], [(innerWidth - cw) / 2, 16], [16, innerHeight - ch - 16], [innerWidth - cw - 16, innerHeight - ch - 16], [16, 16], [innerWidth - cw - 16, 16], [(r.left + r.right - cw) / 2, r.bottom + g], [(r.left + r.right - cw) / 2, r.top - g - ch]];
+        const cover = ([cx, cy]) => { cx = clamp(cx, 8, innerWidth - cw - 8); cy = clamp(cy, 8, innerHeight - ch - 8); return Math.max(0, Math.min(cx + cw, r.right) - Math.max(cx, r.left)) * Math.max(0, Math.min(cy + ch, r.bottom) - Math.max(cy, r.top)); };
+        [x, y] = cands.reduce((best, c) => cover(c) < cover(best) ? c : best);
+      }
     }
     card.style.left = clamp(x, 8, innerWidth - cw - 8) + 'px';
     card.style.top = clamp(y, 8, innerHeight - ch - 8) + 'px';
@@ -160,9 +180,21 @@ const Tour = {
     this.box = null; this.active = null;
     clearInterval(this._follow);
     document.removeEventListener('keydown', this._key, true);
+    document.removeEventListener('pointerdown', this._out, true);
+    document.removeEventListener('keydown', this._type, true);
     removeEventListener('resize', this._rs);
     if (fade) { b.classList.add('out'); setTimeout(() => b.remove(), 300); } else b.remove();
     if (!$('#reader').hidden) { Bars.hideSoon('#topbar'); Bars.hideSoon('#navbar'); }
+  },
+  // المستخدم سكّر الجولة: ما منرجع نفرض عليه جولة الكتاب، ومنقلّه مرة وحدة وين يلاقيها
+  dismiss() {
+    const name = this.active; if (!name) return;
+    this.end();
+    if (name === 'lib') { localStorage.setItem('tour-book', '1'); localStorage.setItem('tourv-book', TOUR_V); }
+    if (!localStorage.getItem('tourHint')) {
+      localStorage.setItem('tourHint', '1');
+      setTimeout(() => Toast.show({ icon: 'help', title: 'الجولة موجودة وقت ما بدك', text: 'من «⋯» ← «الجولة التعريفية»، أو Ctrl+/ واكتب «جولة».', timeout: 5000 }), 350);
+    }
   },
   // كتاب تجريبي فيه أمثلة على كل شي
   async practiceBook() {

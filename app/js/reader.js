@@ -15,6 +15,7 @@ const Reader = {
     b.paper = { ...Settings.newPaper(), ...(b.paper || {}) };
     const recs = await DB.getMany('pages', b.pageIds);
     this.book = b;
+    b.opened = Date.now(); DB.put('books', b); // لـ«كمّل من وين وقفت» بالمكتبة
     this.pages = recs.map((p, i) => p || { id: b.pageIds[i], bookId: b.id, html: '', stickies: [], attach: [] });
     if (this.pages.length % 2) this.addPages(1, false);
     if (!this.pages.length) this.addPages(2, false);
@@ -41,6 +42,7 @@ const Reader = {
     Music.onBookClose();
     Editor.flushAll();
     this.saveBook();
+    this.saveBook.flush();
     Editor.unbindAll();
     Pop.close();
     this.book = null; this.pages = [];
@@ -96,15 +98,25 @@ const Reader = {
     for (const k in v) bk.style.setProperty(k, v[k]);
     this.layout();
   },
+  // شاشة ضيقة بالطول (موبايل/تابلت عمودي): صفحة وحدة بعرض الشاشة بدل صفحتين صغار
+  half: 0,
+  narrow() { return innerWidth <= 820 && innerWidth < innerHeight; },
   layout() {
     if (!this.book) return;
     // نترك مكاناً للحبل على اليسار
     // وإذا شريط التنسيق مثبّت تحت، نرفع الكتاب شوي ونصغّره حتى ما يغطيه
     const dock = document.body.classList.contains('fmt-docked') ? 62 : 0;
-    const s = Math.min((innerWidth - 190) / (2 * PW + 30), (innerHeight - 24 - dock) / (PH + 16));
+    const nar = this.narrow();
+    document.body.classList.toggle('narrow', nar);
+    let s, dx = 0;
+    if (nar) {
+      s = Math.min((innerWidth - 12) / PW, (innerHeight - 24 - dock) / (PH + 16));
+      // الصفحة الظاهرة: الأولى أو الثانية من الفتحة (العربي: الأولى يمين)
+      if (this.s >= 0) { const first = this.book.dir === 'rtl' ? 'right' : 'left', side = this.half ? (first === 'right' ? 'left' : 'right') : first; dx = (side === 'right' ? -300 : 300) * s; }
+    } else s = Math.min((innerWidth - 190) / (2 * PW + 30), (innerHeight - 24 - dock) / (PH + 16));
     this.scale = s;
     $('#book').style.top = dock ? `calc(50% - ${dock / 2}px)` : '';
-    $('#book').style.transform = `translate(-50%,-50%) scale(${s})`;
+    $('#book').style.transform = `translate(-50%,-50%) translateX(${dx}px) scale(${s})`;
   },
 
   /* بناء الصفحات */
@@ -124,6 +136,7 @@ const Reader = {
       ${live ? '<div class="flipzone"></div>' : ''}</div>`);
     const c = $('.content', pg);
     c.innerHTML = p.html || '';
+    Editor.listDirections(c);
     if (!live) $$('video', c).forEach(v => { v.preload = 'none'; v.removeAttribute('controls'); });
     Stickies.renderAll(pg, p, live);
     Attach.render(pg, p, live);
@@ -207,6 +220,9 @@ const Reader = {
   },
   async turn(dir, target = null) {
     if (this.busy || !this.book) return;
+    // صفحة وحدة بالشاشة: «التالي» بيروح للصفحة الثانية من نفس الفتحة قبل ما يقلّب
+    if (target == null && this.s >= 0 && this.narrow() && (dir > 0 ? this.half === 0 : this.half === 1)) { this.half = dir > 0 ? 1 : 0; this.layout(); Editor.focusPage && this.s >= 0 && Editor.live.get(2 * this.s + this.half) && Editor.live.get(2 * this.s + this.half).c.focus({ preventScroll: true }); return; }
+    if (target == null) this.half = dir > 0 ? 0 : 1;
     const to = target != null ? target : this.s + dir;
     if (to === this.s || !this.prepTurn(to)) return;
     this.busy = true;
@@ -216,6 +232,7 @@ const Reader = {
     await this.animate(leaf, 0, 1, 720);
     this.s = to;
     this.finishTurn(leaf);
+    if (this.narrow()) this.layout();
   },
   finishTurn(leaf) {
     this.render();
@@ -279,6 +296,8 @@ const Reader = {
     if (!this.book) return;
     i = clamp(i, 0, this.pages.length - 1);
     const t = Math.floor(i / 2);
+    this.half = i % 2;
+    if (this.narrow()) this.layout();
     if (t === this.s) { Editor.focusPage(i); return Promise.resolve(); }
     return this.turn(t > this.s ? 1 : -1, t).then(() => Editor.focusPage(i));
   },
@@ -406,6 +425,19 @@ const Bars = {
       if (!top && !e.target.closest('#topbar')) this.hideSoon('#topbar');
       if (!bot && !e.target.closest('#navbar')) this.hideSoon('#navbar');
     }, { passive: true });
+    // لمس (موبايل/تابلت): ما في ماوس يقرّب من الحافة، فنقرة على أعلى أو أسفل الشاشة بتطلّع الأشرطة
+    document.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' || $('#reader').hidden || (e.target.closest && e.target.closest('.bar, .selbar, .pop, .modal-back'))) return;
+      if (e.clientY < 56) { this.show('#topbar'); setTimeout(() => this.hideSoon('#topbar'), 2500); }
+      else if (e.clientY > innerHeight - 64 && !document.body.classList.contains('reviewing')) { this.show('#navbar'); setTimeout(() => this.hideSoon('#navbar'), 2500); }
+    }, { passive: true });
+    // صفحة وحدة بالشاشة: لما المؤشر يروح للصفحة الثانية (الكتابة كمّلت عليها) بنلحقه
+    document.addEventListener('focusin', e => {
+      const pg = e.target.closest && e.target.closest('.page[data-i]');
+      if (!pg || !Reader.book || !Reader.narrow()) return;
+      const i = +pg.dataset.i;
+      if (Math.floor(i / 2) === Reader.s && i % 2 !== Reader.half) { Reader.half = i % 2; Reader.layout(); }
+    });
   },
   show(s) { const b = $(s); clearTimeout(b._t); b._t = null; b.classList.add('show'); },
   hideSoon(s) {
@@ -415,7 +447,7 @@ const Bars = {
     b._t = setTimeout(() => {
       b._t = null;
       if (Pop.cur && Pop.cur._from === s) { this.hideSoon(s); return; }
-      if (b.matches(':hover')) return;
+      if (b.matches(':hover, :focus-within')) return;
       b.classList.remove('show');
     }, 1300);
   },

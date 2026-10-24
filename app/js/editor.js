@@ -101,8 +101,8 @@ const Editor = {
       const imgs = files.filter(f => f.type.startsWith('image/'));
       const vids = files.filter(f => f.type.startsWith('video/'));
       // ملفات وورد/إكسل/PDF/CSV: بتتحوّل لصفحات بنفس تنسيقها
-      const doc = files.find(f => Import.can(f) || Import.legacy(f));
-      if (doc) Import.file(doc, l);
+      const doc = files.find(f => Importer.can(f) || Importer.legacy(f));
+      if (doc) Importer.file(doc, l);
       if (imgs.length) Stickies.addPhotos(l, imgs, pt);
       if (vids.length) Media2.insertVideo(l, vids[0], pt);
     });
@@ -144,6 +144,7 @@ const Editor = {
   isEmpty(c) { return !c.textContent.trim() && !c.querySelector('img,video,figure,table,hr,.cb,pre'); },
 
   normalize(c) {
+    this.listDirections(c);
     const kids = [...c.childNodes];
     if (kids.some(n => (n.nodeType === 3 && n.textContent.trim()) || (n.nodeType === 1 && !BLOCKS.has(n.tagName)))) {
       const s = getSelection(), an = s.anchorNode, ao = s.anchorOffset;
@@ -161,6 +162,26 @@ const Editor = {
       li.prepend(el('<span class="cb" contenteditable="false"></span>'));
       if (atStart) s.collapse(li, 1); // المؤشر بعد المربع لا قبله
     });
+  },
+
+  listDirections(c) {
+    // plaintext يرتّب النص فقط؛ علامة القائمة تحتاج اتجاه العنصر نفسه.
+    $$('ol,ul,li', c).forEach(n => {
+      if (n.hasAttribute('dir')) return;
+      const parent = n.parentElement.closest('[dir]');
+      if (parent && c.contains(parent) && /^(rtl|ltr)$/.test(parent.dir)) return;
+      n.dir = 'auto';
+    });
+  },
+  listValueAt(list, index) {
+    const items = [...list.children].filter(n => n.tagName === 'LI');
+    const step = list.reversed ? -1 : 1;
+    let value = list.hasAttribute('start') ? list.start : list.reversed ? items.length : 1;
+    for (let i = 0; i <= index; i++) {
+      if (items[i].hasAttribute('value')) value = items[i].value;
+      if (i < index) value += step;
+    }
+    return value;
   },
 
   /* ===== انسياب النص للصفحة التالية عند امتلاء الصفحة ===== */
@@ -222,8 +243,10 @@ const Editor = {
       const tail = block.cloneNode(false);
       if (tag === 'TABLE') { const tb = document.createElement('tbody'); tail.append(tb); items.slice(k).forEach(x => tb.append(x)); }
       else {
+        const start = tag === 'OL' ? this.listValueAt(block, k) : null;
+        if (tag === 'OL' && block.reversed && !block.hasAttribute('start')) block.start = items.length;
         items.slice(k).forEach(x => tail.append(x));
-        if (tag === 'OL') tail.setAttribute('start', (+block.getAttribute('start') || 1) + k);
+        if (tag === 'OL') tail.start = start;
       }
       this.linkHead(block, tail);
       return { tail, at };
@@ -289,6 +312,7 @@ const Editor = {
       const tb = first.tBodies[0] || first;
       [...last.querySelectorAll('tr')].reverse().forEach(tr => tb.prepend(tr));
     } else {
+      if (first.tagName === 'OL') first.start = this.listValueAt(last, 0);
       const glue = first.dataset.sp && !/\s$/.test(last.textContent) && !/^\s/.test(first.textContent);
       first.prepend(...last.childNodes, ...(glue ? [document.createTextNode(' ')] : []));
     }
@@ -423,18 +447,34 @@ const Editor = {
     text = (text || '').replace(/\r\n?/g, '\n');
     const ae = anchorEl(), pre = ae && ae.closest('pre.code');
     if (pre) { this.insertText(text); this.changed(l); return; }
-    const table = /<table/i.test(html);
-    if (!table && looksLikeCode(text)) { this.insertCode(l, text); return; }
+    // نص عادي بسطر واحد: فوراً بدون ما نحمّل شي
+    if (!html && !/[\t\n]/.test(text)) { if (looksLikeCode(text)) this.insertCode(l, text); else this.pastePlain(text); return; }
+    // منسّق أو جدول أو قائمة: منظّف اللصق بيتحمّل أول مرة بس
+    if (typeof Clean !== 'undefined') { this.pasteRich(l, html, text); return; } // محمّل من قبل: فوراً
+    Importer.load().then(() => this.pasteRich(l, html, text)).catch(() => { if (text) this.pastePlain(text); });
+  },
+  pasteRich(l, html, text) {
     // لصق منسّق (إكسل/وورد/مواقع): جداول وعناوين وخط عريض وألوان بتضل
     if (html) {
       const blocks = Clean.html(html);
-      if (blocks.length && (table || blocks.length > 1 || /<(b|i|u|s|a|span|h2|h3|ul|ol|blockquote|sup|sub)[\s>]/.test(blocks.join('')))) { Import.insertHere(l, blocks); return; }
+      if (blocks.length) { this.pasteBlocks(l, blocks); return; }
     }
     // نص بأعمدة (Tab) = جدول من إكسل أو جوجل شيت
     const tsv = Clean.tsv(text);
-    if (tsv) { Import.insertHere(l, [tsv]); return; }
+    if (tsv) { this.pasteBlocks(l, [tsv]); return; }
     if (!text) return;
+    const numbered = Clean.numbered(text);
+    if (numbered) { this.pasteBlocks(l, numbered); return; }
+    if (looksLikeCode(text)) { this.insertCode(l, text); return; }
     this.pastePlain(text);
+  },
+  pasteBlocks(l, blocks) {
+    this.ensureCaret(l);
+    let html = blocks.join('');
+    if (blocks.length === 1 && /^<p>/.test(html)) html = html.replace(/^<p>|<\/p>$/g, '');
+    // أمر المتصفح يستبدل التحديد ويحتفظ بموضع المؤشر وسجل التراجع.
+    document.execCommand('insertHTML', false, html);
+    this.changed(l);
   },
   pastePlain(text) {
     const lines = text.split('\n');
@@ -941,7 +981,7 @@ const Ctx = {
       { icon: 'mic', label: hasSel ? 'تسجيل صوت للكلمة المحددة' : 'تسجيل صوت للصفحة', act: doAt(() => hasSel ? Voice.attachToSelection(Sel.save(), l) : Voice.attachToPage(l, e)) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
       { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
-      { icon: 'upload', label: 'ملف Word / Excel / PDF…', act: () => Import.pick(l) },
+      { icon: 'upload', label: 'ملف Word / Excel / PDF…', act: () => Importer.pick(l) },
       ...(hasSel ? [{ icon: 'tape', label: 'اجعله جواباً لسؤال مراجعة', act: doAt(() => Study.mark(Sel.save(), l)) }] : []),
       ...(e.target.closest('.ans') ? [{ icon: 'x', label: 'إلغاء سؤال المراجعة', act: () => Study.unmark(e.target.closest('.ans'), l) }] : []),
       '-', { head: `الصفحة ${l.i + 1}` },

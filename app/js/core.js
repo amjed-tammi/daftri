@@ -6,6 +6,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const raf = () => new Promise(r => requestAnimationFrame(() => r()));
+// الأرقام العربية والفارسية تُقرأ كقيم، بدون تغيير شكل النص المكتوب.
+const latinDigits = s => String(s ?? '').replace(/[٠-٩۰-۹]/g, c => String(c.charCodeAt(0) - (c <= '٩' ? 0x660 : 0x6f0)));
 
 function el(html) {
   const t = document.createElement('template');
@@ -124,10 +126,11 @@ const DB = {
   open() {
     if (this._p) return this._p;
     this._p = new Promise((res, rej) => {
-      const r = indexedDB.open('daftari', 5);
+      const r = indexedDB.open('daftari', 6);
       r.onupgradeneeded = e => {
         const d = r.result;
-        for (const s of ['books', 'pages', 'blobs', 'trash', 'cards', 'journal', 'links', 'exams', 'subjects', 'files', 'plans']) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s, { keyPath: 'id' });
+        for (const s of ['books', 'pages', 'blobs', 'trash', 'cards', 'journal', 'links', 'exams', 'subjects', 'files', 'plans', 'meta']) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s, { keyPath: 'id' });
+        // نسخة 6: meta (مثلاً مجلد النسخ الاحتياطي التلقائي — إذن المتصفح بينحفظ هون)
         // نسخة 5: المواد فوق الكتب. كل كتاب قديم بيروح لـ«بدون مادة» (ما بينحذف ولا شي)
         if (e.oldVersion < 5) {
           const tx = r.transaction;
@@ -332,6 +335,34 @@ const Toast = {
   },
 };
 
+/* ============ تحميل وقت الحاجة ============
+   ملفات كبيرة وما بتلزم كل يوم (مثل قارئ وورد/إكسل/PDF) ما بتنحمّل مع الإقلاع: أول مرة بتلزم بس.
+   (عامل الخدمة بيقرأ هالقائمة كمان، فبتشتغل بدون إنترنت.) */
+const Lazy = {
+  files: { importer: 'js/importer.js' },
+  _p: {},
+  need(k) {
+    return this._p[k] || (this._p[k] = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = this.files[k];
+      s.onload = () => res();
+      s.onerror = () => { delete this._p[k]; rej(new Error('ما قدرنا نحمّل ' + k)); };
+      document.head.append(s);
+    }));
+  },
+};
+// واجهة الاستيراد: الفحص السريع هون، والشغل الثقيل (importer.js) بيتحمّل أول ما تسحب ملف أو تلصق
+const Importer = {
+  ACCEPT: '.docx,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.pdf',
+  can(f) { return /\.(docx|xlsx|xlsm|csv|tsv|txt|md|pdf)$/i.test(f.name || '') || f.type === 'application/pdf'; },
+  legacy(f) { return /\.(doc|xls|ppt|pptx|odt|ods|rtf)$/i.test(f.name || ''); },
+  load() { return Lazy.need('importer').catch(e => { Toast.show({ icon: 'x', text: e.message }); throw e; }); },
+  file(f, l) { return this.load().then(() => Import.file(f, l)); },
+  newBook(f) { return this.load().then(() => Import.newBook(f)); },
+  pick(l) { return this.load().then(() => Import.pick(l)); },
+  pickBook() { pickFile(this.ACCEPT, false).then(fs => { if (fs && fs.length) this.newBook(fs[0]); }); },
+};
+
 /* ============ النوافذ المنبثقة ============ */
 const Pop = {
   cur: null, onclose: null,
@@ -351,9 +382,27 @@ const Pop = {
     y = clamp(y, 8, Math.max(8, innerHeight - ph - 8)); // ما بتطلع برا الشاشة أبداً حتى لو الزر مخفي
     p.style.left = x + 'px'; p.style.top = y + 'px';
     this.cur = p;
+    const opener = anchor instanceof Element ? anchor : document.activeElement;
+    const selection = Sel.save();
+    const restore = () => {
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+      if (selection && selection.startContainer.isConnected) Sel.restore(selection);
+    };
     this._out = e => { if (this.cur && !this.cur.contains(e.target)) this.close(); };
-    this._key = e => { if (e.key === 'Escape') this.close(); };
-    setTimeout(() => { document.addEventListener('pointerdown', this._out, true); document.addEventListener('keydown', this._key); }, 0);
+    this._key = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); this.close(); restore(); }
+      else if (e.key === 'Tab' && !p.contains(e.target)) { this.close(); }
+      else if (content.classList.contains('menu') && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const items = $$('button:not(:disabled)', content);
+        let i = items.indexOf(document.activeElement);
+        i = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+        items[i]?.focus();
+      }
+    };
+    p._restoreFocus = restore;
+    const outside = this._out, key = this._key;
+    setTimeout(() => { if (this.cur !== p) return; document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', key, true); }, 0);
     requestAnimationFrame(() => p.classList.add('in'));
     return p;
   },
@@ -362,7 +411,7 @@ const Pop = {
     const p = this.cur; this.cur = null;
     p.remove();
     document.removeEventListener('pointerdown', this._out, true);
-    document.removeEventListener('keydown', this._key);
+    document.removeEventListener('keydown', this._key, true);
     const f = this.onclose; this.onclose = null; f && f();
   },
 };
@@ -376,7 +425,7 @@ const Menu = {
       if (it.head) { m.append(el(`<div class="m-head">${esc(it.head)}</div>`)); return; }
       const b = el(`<button class="m-item ${it.danger ? 'danger' : ''}" ${it.disabled ? 'disabled' : ''}>${ic(it.icon || 'star')}<span>${esc(it.label)}</span>${it.hint ? `<kbd>${esc(it.hint)}</kbd>` : ''}</button>`);
       b.addEventListener('mousedown', e => e.preventDefault());
-      b.onclick = () => { Pop.close(); it.act && it.act(); };
+      b.onclick = () => { const restore = Pop.cur && Pop.cur._restoreFocus; Pop.close(); restore && restore(); it.act && it.act(); };
       m.append(b);
     });
     return Pop.open(anchor, m, { cls: 'menu-pop', ...opts });
@@ -385,16 +434,59 @@ const Menu = {
 
 /* نافذة حوار */
 const Modal = {
-  open(node, { cls = '', onClose } = {}) {
+  top() { return $$('.modal-back').filter(b => !b._closing).at(-1); },
+  focusables(root) {
+    return $$('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex], [contenteditable="true"]', root)
+      .filter(n => n.tabIndex >= 0 && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden');
+  },
+  open(node, { cls = '', onClose, label } = {}) {
+    Pop.close();
+    const opener = document.activeElement;
     const back = el(`<div class="modal-back"><div class="modal ${cls}"></div></div>`);
-    back.firstElementChild.append(node);
+    const dialog = back.firstElementChild;
+    dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.tabIndex = -1;
+    dialog.setAttribute('aria-label', label || $('h1,h2,h3,h4', node)?.textContent.trim() || 'نافذة دفتري');
+    dialog.append(node);
+    // بعض النوافذ فيها زر إغلاقها؛ البقية تحتاج طريقة خروج مرئية.
+    if (!$('[data-a="close"], [data-a="cancel"], [data-a="no"]', node)) {
+      const row = el(`<div class="modal-close-row"><button type="button" class="btn ghost sm" aria-label="إغلاق النافذة">${ic('x')} إغلاق</button></div>`);
+      row.firstElementChild.onclick = () => close(); dialog.prepend(row);
+    }
     document.body.append(back);
     requestAnimationFrame(() => back.classList.add('in'));
-    const close = () => { back.classList.remove('in'); setTimeout(() => back.remove(), 220); document.removeEventListener('keydown', key); onClose && onClose(); };
-    const key = e => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', key);
+    const close = () => {
+      if (back._closing) return;
+      back._closing = true; back.classList.remove('in'); back.style.pointerEvents = 'none';
+      setTimeout(() => back.remove(), 220);
+      if (back.contains(document.activeElement)) {
+        const parent = this.top();
+        if (opener && opener.isConnected && (!parent || parent.contains(opener))) opener.focus({ preventScroll: true });
+        else if (parent) (this.focusables(parent)[0] || parent.firstElementChild).focus({ preventScroll: true });
+        else document.activeElement.blur();
+      }
+      onClose && onClose();
+    };
+    back._close = close;
+    if (!this._keys) {
+      this._keys = e => {
+        const top = this.top(); if (!top || Pop.cur) return;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); top._close(); }
+        else if (e.key === 'Tab') {
+          const items = this.focusables(top), first = items[0], last = items.at(-1);
+          if (!first) { e.preventDefault(); top.firstElementChild.focus(); }
+          else if (!top.contains(document.activeElement) || (e.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+            e.preventDefault(); (e.shiftKey ? last : first).focus();
+          }
+        }
+      };
+      document.addEventListener('keydown', this._keys, true);
+    }
     back.addEventListener('pointerdown', e => { if (e.target === back) close(); });
-    return { close, el: back.firstElementChild };
+    requestAnimationFrame(() => {
+      if (!back.isConnected || back._closing || this.top() !== back || back.contains(document.activeElement)) return;
+      (this.focusables(node)[0] || dialog).focus({ preventScroll: true });
+    });
+    return { close, el: dialog };
   },
   confirm(title, text, { ok = 'تأكيد', danger = false } = {}) {
     return new Promise(res => {

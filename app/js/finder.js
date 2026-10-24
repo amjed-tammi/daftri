@@ -36,7 +36,7 @@ const Finder = {
       <div class="f-in">${ic('search')}<input class="inp" placeholder="ابحث بكتبك… Search" autocomplete="off" spellcheck="false"></div>
       ${inBook ? `<div class="seg f-scope"><button data-s="book">هذا الكتاب</button><button data-s="all">كل الكتب</button></div>` : ''}
       <div class="f-res"><p class="muted f-hint">اكتب كلمة، عربي أو English. البحث بيتجاهل التشكيل والهمزات.</p></div></div>`);
-    const m = Modal.open(n, { cls: 'finder-modal' });
+    const m = Modal.open(n, { cls: 'finder-modal', label: 'البحث في الكتب' });
     const inp = $('input', n), res = $('.f-res', n);
     const docs = await this.build();
     const syncScope = () => $$('.f-scope button', n).forEach(b => b.classList.toggle('on', b.dataset.s === scope));

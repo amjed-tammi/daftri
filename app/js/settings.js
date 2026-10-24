@@ -94,8 +94,19 @@ const Settings = {
   load() {
     let x = {};
     try { x = JSON.parse(localStorage.getItem('appDefaults') || '{}'); } catch { }
-    this.d = { dir: x.dir || 'rtl', paper: { ...PAPER_DEFAULT, ...(x.paper || {}) }, music: { track: null, auto: false, session: true, ...(x.music || {}) } };
+    // جهاز ضعيف (نواتين أو ذاكرة قليلة): الوضع الخفيف بيبدأ شغّال لحاله
+    const weak = (navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2;
+    this.d = {
+      dir: x.dir || 'rtl', paper: { ...PAPER_DEFAULT, ...(x.paper || {}) }, music: { track: null, auto: false, session: true, ...(x.music || {}) },
+      backup: { on: false, ...(x.backup || {}) },
+      prayer: { on: false, city: 'Amman', country: 'Jordan', label: 'عمّان', lat: null, lng: null, method: '', school: 0, ...(x.prayer || {}) },
+      app: { lite: weak, profile: null, ...(x.app || {}) },
+    };
+    this.applyLite();
   },
+  // إعدادات التطبيق العامة (الوضع الخفيف، نوع المستخدم…)
+  set(k, v) { this.d.app[k] = v; this.save(); if (k === 'lite') this.applyLite(); },
+  applyLite() { document.body.classList.toggle('lite', !!(this.d.app && this.d.app.lite)); },
   save() { localStorage.setItem('appDefaults', JSON.stringify(this.d)); },
   newPaper() { return JSON.parse(JSON.stringify(this.d.paper)); },
   // موسيقى الكتاب: «الافتراضي» بيرجع لإعدادات التطبيق
@@ -110,6 +121,15 @@ const Settings = {
     return (withDefault ? `<option value="default" ${!cur || cur === 'default' ? 'selected' : ''}>الافتراضي${def ? ` (${esc(def)})` : ''}</option>` : '')
       + `<option value="none" ${cur === 'none' || (!withDefault && !cur) ? 'selected' : ''}>بدون موسيقى</option>`
       + Music.tracks.map(t => `<option value="${t.id}" ${cur === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  },
+
+  // أوقات الصلاة: نجيبها من جديد ونعرض أوقات اليوم (أو السبب إذا ما زبطت)
+  async prayerSync(n) {
+    const st = n && $('.pr-status', n);
+    if (!this.d.prayer.on) { Prayer.refresh(); return; }
+    if (st) st.textContent = 'عم نجيب الأوقات…';
+    try { await Prayer.refresh(); if (st) st.textContent = 'اليوم: ' + Prayer.times().filter(x => x.en !== 'Sunrise').map(x => `${x.ar} ${Prayer.fmt(x.at)}`).join(' · '); }
+    catch (er) { if (st) st.textContent = 'ما قدرنا نجيب الأوقات: ' + (er.name === 'AbortError' ? 'ما في إنترنت' : er.message) + ' — جرّب مرة ثانية.'; }
   },
 
   /* ===== لوحة الإعدادات العامة ===== */
@@ -133,6 +153,27 @@ const Settings = {
       <div class="st-tab" data-tab="app" hidden>
         <label class="chk"><input type="checkbox" data-k="flip" ${localStorage.getItem('flipSound') === '0' ? '' : 'checked'}> <span>صوت تقليب الورق</span></label>
         <label class="chk"><input type="checkbox" data-k="dock" ${Editor.docked() ? 'checked' : ''}> <span>شريط التنسيق مثبّت تحت الكتاب</span></label>
+        <div class="st-block">
+          <b>${ic('download')} النسخ الاحتياطي التلقائي</b>
+          <p class="muted sm">${AutoBackup.status()}</p>
+          <p class="lbl">كتبك محفوظة جوّا المتصفح. ${AutoBackup.can ? 'اختار مجلد (مثلاً جوّا OneDrive أو Google Drive) وكل يوم بتنحفظ نسخة لحالها، وبنخلّي آخر 7 أيام.' : 'متصفحك ما بيسمح بمجلد تلقائي، فبنذكّرك كل أسبوع تنزّل نسخة.'}</p>
+          <div class="row">${AutoBackup.can ? `<button class="btn primary sm" data-a="bkpick">${ic('folder')} ${D.backup.on ? 'غيّر المجلد' : 'اختار مجلد'}</button>${D.backup.on ? `<button class="btn ghost sm" data-a="bknow">${ic('check')} احفظ نسخة هلّق</button><button class="btn ghost sm" data-a="bkoff">أطفيه</button>` : ''}` : `<button class="btn primary sm" data-a="backup">${ic('download')} نزّل نسخة</button>`}</div>
+        </div>
+        <div class="st-block pr-block">
+          <b>🕌 أوقات الصلاة</b>
+          <label class="chk"><input type="checkbox" data-k="pron" ${D.prayer.on ? 'checked' : ''}> <span>اعرض الصلاة الجاية بالمكتبة، وذكّرني وقت الأذان (ووقّف جلسة الدراسة إذا بدّي)</span></label>
+          <div class="pr-set" ${D.prayer.on ? '' : 'hidden'}>
+            <div class="row"><select class="inp" data-k="prcity">${PRAYER_CITIES.map(([ar, en, co]) => `<option value="${esc(en + '|' + co)}" ${D.prayer.lat == null && D.prayer.city === en ? 'selected' : ''}>${esc(ar)}</option>`).join('')}${D.prayer.lat != null ? '<option selected value="geo">📍 موقعي</option>' : ''}</select>
+              <button class="btn ghost sm" type="button" data-a="prgeo">📍 حدّد موقعي</button></div>
+            <div class="row">
+              <label class="fld"><span>طريقة الحساب</span><select class="inp" data-k="prmethod">${PRAYER_METHODS.map(([v, t]) => `<option value="${v}" ${String(D.prayer.method || '') === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+              <label class="fld"><span>العصر</span><select class="inp" data-k="prschool"><option value="0" ${+D.prayer.school ? '' : 'selected'}>الجمهور</option><option value="1" ${+D.prayer.school ? 'selected' : ''}>الحنفي</option></select></label>
+            </div>
+            <p class="muted sm pr-status">${Prayer.times() ? 'اليوم: ' + Prayer.times().filter(x => x.en !== 'Sunrise').map(x => `${x.ar} ${Prayer.fmt(x.at)}`).join(' · ') : 'بنجيب الأوقات من Aladhan (مجاني) مرة بالشهر، وبتضل شغّالة بدون إنترنت.'}</p>
+          </div>
+        </div>
+        <label class="chk"><input type="checkbox" data-k="study" ${Onboard.study() ? 'checked' : ''}> <span>أدوات الدراسة بالشريط (مراجعة، امتحانات، شبكة الأفكار)</span></label>
+        <label class="chk"><input type="checkbox" data-k="lite" ${D.app.lite ? 'checked' : ''}> <span>وضع خفيف: بدون تأثيرات ولا حركة (للأجهزة القديمة وتوفير البطارية)</span></label>
         <div class="row"><button class="btn ghost sm" data-a="reminders">${ic('bell')} التذكيرات</button><button class="btn ghost sm" data-a="tour">${ic('help')} الجولة التعريفية</button></div>
         <div class="row"><button class="btn ghost sm" data-a="backup">${ic('download')} نسخة احتياطية لكل المكتبة</button><button class="btn ghost sm" data-a="restore">${ic('upload')} استعادة</button><button class="btn ghost sm" data-a="trash">${ic('trash')} سلة المحذوفات</button></div>
       </div>
@@ -154,6 +195,14 @@ const Settings = {
         case 'backup': Backup.exportBooks(); break;
         case 'restore': m.close(); Backup.importFile(); break;
         case 'trash': m.close(); Trash.panel(); break;
+        case 'bkpick': if (await AutoBackup.pick()) { m.close(); this.panel('app'); } break;
+        case 'bknow': { const r = await AutoBackup.run(true, true); Toast.show({ icon: r === 'ok' ? 'check' : 'download', text: r === 'ok' ? 'انحفظت نسخة ✓' : 'ما قدرنا نحفظ — اختار المجلد مرة ثانية', timeout: 2500 }); m.close(); this.panel('app'); break; }
+        case 'bkoff': AutoBackup.off(); m.close(); this.panel('app'); break;
+        case 'prgeo': {
+          const st = $('.pr-status', n); st.textContent = 'عم نحدد موقعك…';
+          try { const g = await Prayer.locate(); Object.assign(D.prayer, { lat: g.lat, lng: g.lng, label: 'موقعي' }); this.save(); await this.prayerSync(n); } catch (er) { st.textContent = er.message; }
+          break;
+        }
         case 'applyall': {
           if (!(await Modal.confirm('تطبيق على كل الكتب', 'بدك ورق وخط هالإعدادات يصير لكل كتبك الحالية؟', { ok: 'طبّق' }))) return;
           Editor.flushAll();
@@ -171,6 +220,16 @@ const Settings = {
       else if (k === 'msession') { D.music.session = e.target.checked; this.save(); }
       else if (k === 'flip') localStorage.setItem('flipSound', e.target.checked ? '1' : '0');
       else if (k === 'dock') Editor.setDock(e.target.checked);
+      else if (k === 'lite') this.set('lite', e.target.checked);
+      else if (k && k.startsWith('pr')) {
+        const P = D.prayer, v = e.target.value;
+        if (k === 'pron') { P.on = e.target.checked; $('.pr-set', n).hidden = !P.on; }
+        else if (k === 'prcity' && v !== 'geo') { const [city, country] = v.split('|'); const c = PRAYER_CITIES.find(x => x[1] === city); Object.assign(P, { city, country, label: c ? c[0] : city, lat: null, lng: null }); }
+        else if (k === 'prmethod') P.method = v;
+        else if (k === 'prschool') P.school = +v;
+        this.save(); this.prayerSync(n);
+      }
+      else if (k === 'study') { this.set('studyTools', e.target.checked); Onboard.applyProfile(); }
     });
     syncDir(); show(tab);
   },

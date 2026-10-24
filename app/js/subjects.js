@@ -161,7 +161,7 @@ const Files = {
         <button class="btn ghost sm" data-a="plan" title="حط قراءته بالتقويم">${ic('calendar')} خطّط</button>
         <button class="btn ghost sm" data-a="dl" title="حفظ نسخة على جهازك">${ic('download')} تنزيل</button>
         <button class="ib" data-a="close" title="إغلاق">${ic('x')}</button></header>
-      <iframe class="pdfv-frame" title="${esc(rec.name)}" src="${url}"></iframe></div>`);
+      <iframe class="pdfv-frame" title="${esc(rec.name)}" src="${url}#view=FitH&pagemode=none"></iframe></div>`);
     const m = Modal.open(n, { cls: 'pdf-modal', onClose: () => setTimeout(() => URL.revokeObjectURL(url), 1000) });
     n.addEventListener('click', e => {
       const a = e.target.closest('[data-a]'); if (!a) return;

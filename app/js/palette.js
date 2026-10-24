@@ -15,11 +15,12 @@ const Cmd = {
       { id: 'note', g: 'كتابة', icon: 'note', label: 'ملاحظة لاصقة', en: 'sticky note', ctx: 'book', act: need(l => Stickies.addNote(l)) },
       { id: 'code', g: 'كتابة', icon: 'code', label: 'صندوق كود', en: 'code snippet', ctx: 'book', act: need(l => { l.c.focus(); Editor.ensureCaret(l); Editor.insertCode(l); }) },
       { id: 'mic', g: 'كتابة', icon: 'mic', label: 'تسجيل صوت للصفحة', en: 'record voice audio', ctx: 'book', act: need(l => Voice.attachToPage(l)) },
-      { id: 'import', g: 'كتابة', icon: 'upload', label: 'استيراد ملف Word / Excel / PDF', en: 'import word excel pdf docx xlsx csv file', ctx: 'book', act: need(l => Import.pick(l)) },
+      { id: 'import', g: 'كتابة', icon: 'upload', label: 'استيراد ملف Word / Excel / PDF', en: 'import word excel pdf docx xlsx csv file', ctx: 'book', act: need(l => Importer.pick(l)) },
       { id: 'addpage', g: 'كتابة', icon: 'addpage', label: 'إضافة صفحة بعد هذه', en: 'add page', ctx: 'book', act: need(l => Reader.insertPageAfter(l.i)) },
       // الدراسة
       { id: 'review', g: 'دراسة', icon: 'cards', label: 'ابدأ مراجعة اليوم', en: 'review flashcards', ctx: 'book', act: () => Study.startReview() },
       { id: 'examMode', g: 'دراسة', icon: 'tape', label: 'وضع الامتحان: خبّي الأجوبة', en: 'exam mode hide answers', ctx: 'book', act: () => Study.setExam(!Study.exam) },
+      { id: 'sheet', g: 'دراسة', icon: 'page', label: 'ورقة ليلة الامتحان: ملخص الكتاب بصفحة وحدة', en: 'summary cheat sheet exam night print review', ctx: 'book', act: () => Sheet.open() },
       { id: 'exams', g: 'دراسة', icon: 'exam', label: 'امتحانات هالكتاب', en: 'exams quiz test', ctx: 'book', act: () => Exams.panel() },
       { id: 'index', g: 'دراسة', icon: 'list', label: 'الفهرس', en: 'index contents toc', ctx: 'book', act: this.tb('#tbIndex') },
       { id: 'web', g: 'دراسة', icon: 'web', label: 'شبكة الأفكار', en: 'idea web links graph', hint: 'Ctrl+G', ctx: 'book', act: () => IdeaWeb.open() },
@@ -37,7 +38,7 @@ const Cmd = {
       // المكتبة
       { id: 'new', g: 'المكتبة', icon: 'plus', label: 'كتاب جديد', en: 'new book create', ctx: 'lib', act: () => Library.openForm() },
       { id: 'subject', g: 'المكتبة', icon: 'folder', label: 'مادة جديدة', en: 'new subject course folder', ctx: 'lib', act: () => Subjects.form() },
-      { id: 'importBook', g: 'المكتبة', icon: 'upload', label: 'كتاب جديد من ملف Word / Excel', en: 'import new book from word excel docx xlsx csv', ctx: 'lib', act: () => pickFile(IMPORT_ACCEPT, false).then(fs => { if (fs && fs.length) Import.newBook(fs[0]); }) },
+      { id: 'importBook', g: 'المكتبة', icon: 'upload', label: 'كتاب جديد من ملف Word / Excel', en: 'import new book from word excel docx xlsx csv', ctx: 'lib', act: () => Importer.pickBook() },
       { id: 'pdfUp', g: 'المكتبة', icon: 'attach', label: 'رفع ملف PDF (محاضرة، سلايدات)', en: 'upload pdf lecture slides attach', ctx: 'lib', act: () => Files.upload({ subjectId: Library.cur || NO_SUBJECT }) },
       { id: 'open', g: 'المكتبة', icon: 'share', label: 'فتح كتاب مشارَك (.daftar)', en: 'open import shared', ctx: 'lib', act: () => Share.pick() },
       { id: 'trash', g: 'المكتبة', icon: 'trash', label: 'سلة المحذوفات', en: 'trash deleted restore', ctx: 'lib', act: () => Trash.panel() },
@@ -49,6 +50,8 @@ const Cmd = {
       { id: 'remind', g: 'عام', icon: 'bell', label: 'التذكيرات', en: 'reminders alarm water', ctx: 'any', act: () => Reminders.panel($('#btnNight')) },
       { id: 'settings', g: 'عام', icon: 'gear', label: 'الإعدادات العامة', en: 'settings preferences defaults', ctx: 'any', act: () => Settings.panel() },
       { id: 'full', g: 'عام', icon: 'full', label: 'ملء الشاشة', en: 'fullscreen', ctx: 'any', act: () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); } },
+      { id: 'prayer', g: 'عام', icon: 'moon', label: 'أوقات الصلاة', en: 'prayer times salah adhan', ctx: 'any', act: () => { if (Settings.d.prayer.on && Prayer.times()) { const c = $('.pr-chip'); if (c) Prayer.panel(c); else Settings.panel('app'); } else { Settings.panel('app'); setTimeout(() => $('.pr-block')?.scrollIntoView({ block: 'center' }), 250); } } },
+      { id: 'install', g: 'عام', icon: 'download', label: 'ثبّت دفتري كتطبيق (يشتغل بدون إنترنت)', en: 'install app pwa offline desktop mobile', ctx: 'any', act: () => Pwa.install() },
       { id: 'tour', g: 'عام', icon: 'help', label: 'الجولة التعريفية', en: 'tour help guide', ctx: 'any', act: () => Tour.start(this.inBook() ? 'book' : 'lib') },
     ];
   },
