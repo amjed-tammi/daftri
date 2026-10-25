@@ -39,13 +39,19 @@ const Finder = {
     const m = Modal.open(n, { cls: 'finder-modal', label: 'البحث في الكتب' });
     const inp = $('input', n), res = $('.f-res', n);
     const docs = await this.build();
+    // ملفات الـPDF كمان: كل صفحة نص بينبحث فيه (النص بيتجهّز مرة وحدة وبينحفظ)
+    const files = (await DB.all('files')).filter(f => f.blob);
+    const addPdf = f => (f.text || []).forEach((t, i) => { if (t) docs.push({ pdf: f, i, text: t, nm: normMap(t), scopeBook: f.bookId || null, book: { id: 'pdf:' + f.id, title: '📎 ' + f.name } }); });
+    files.filter(f => f.text).forEach(addPdf);
+    const missing = files.filter(f => !f.text);
+    if (missing.length) (async () => { for (const f of missing) { try { await Files.text(f); addPdf(f); } catch { } } if (n.isConnected && inp.value.trim().length > 1) run(); })();
     const syncScope = () => $$('.f-scope button', n).forEach(b => b.classList.toggle('on', b.dataset.s === scope));
     const run = () => {
       const q = normMap(inp.value.trim()).n;
       if (q.length < 2) { res.innerHTML = '<p class="muted f-hint">اكتب حرفين أو أكثر…</p>'; return; }
       const hits = [];
       for (const d of docs) {
-        if (scope === 'book' && d.book.id !== Reader.book.id) continue;
+        if (scope === 'book' && (d.pdf ? d.scopeBook : d.book.id) !== Reader.book.id) continue;
         let k = d.nm.n.indexOf(q), c = 0, first = -1;
         while (k > -1 && c < 99) { if (first < 0) first = k; c++; k = d.nm.n.indexOf(q, k + q.length); }
         if (c) hits.push({ d, c, first });
@@ -61,7 +67,7 @@ const Finder = {
           const t = h.d.text, s0 = h.d.nm.map[h.first], s1 = h.d.nm.map[Math.min(h.first + q.length - 1, h.d.nm.map.length - 1)] + 1;
           const a = Math.max(0, s0 - 45), z = Math.min(t.length, s1 + 70);
           const snip = (a ? '…' : '') + esc(t.slice(a, s0)) + '<mark>' + esc(t.slice(s0, s1)) + '</mark>' + esc(t.slice(s1, z)) + (z < t.length ? '…' : '');
-          return `<button class="f-hit" data-b="${b.id}" data-i="${h.d.i}"><span class="f-pg">ص ${h.d.i + 1}</span><span class="f-snip">${snip.replace(/\n+/g, ' ')}</span>${h.c > 1 ? `<em>×${h.c}</em>` : ''}</button>`;
+          return `<button class="f-hit" ${h.d.pdf ? `data-f="${h.d.pdf.id}"` : `data-b="${b.id}"`} data-i="${h.d.i}"><span class="f-pg">ص ${h.d.i + 1}</span><span class="f-snip">${snip.replace(/\n+/g, ' ')}</span>${h.c > 1 ? `<em>×${h.c}</em>` : ''}</button>`;
         }).join('')}</section>`;
       }).join('');
     };
@@ -73,6 +79,7 @@ const Finder = {
       const h = e.target.closest('.f-hit'); if (!h) return;
       const q = inp.value.trim();
       m.close();
+      if (h.dataset.f) { setTimeout(() => Files.open(h.dataset.f, +h.dataset.i + 1), 250); return; } // نتيجة من PDF: بيفتح على صفحتها
       await this.go(h.dataset.b, +h.dataset.i, q);
     });
     syncScope();
@@ -120,15 +127,12 @@ const Finder = {
         if (t) heads.push({ lvl: m[1], t, i });
       }
     });
-    const due = $('#rvBadge').hidden ? 0 : +$('#rvBadge').textContent;
     const n = el(`<div class="panel toc">
       <h4>${ic('list')} فهرس «${esc(Reader.book.title)}»</h4>
-      ${due ? `<button class="toc-rv" data-rv>${ic('cards')} عندك ${due} للمراجعة اليوم — ابدأ</button>` : ''}
       <div class="toc-list">${heads.length ? heads.map(h => `<button class="toc-i ${h.lvl}" data-i="${h.i}"><span>${esc(h.t)}</span><i></i><b>${h.i + 1}</b></button>`).join('')
         : '<p class="muted sm">العناوين اللي بتكتبها بتظهر هون تلقائياً. حدّد سطر واضغط زر العنوان (H) بشريط التنسيق.</p>'}</div>
     </div>`);
     n.addEventListener('click', e => {
-      if (e.target.closest('[data-rv]')) { Pop.close(); Study.startReview(); return; }
       const b = e.target.closest('[data-i]'); if (!b) return;
       Pop.close(); Reader.showPage(+b.dataset.i);
     });
@@ -191,14 +195,11 @@ const Trash = {
       await DB.delMany('pages', b.pageIds || []);
       await Media.del([...blobs]);
       await IdeaWeb.removeForPages(b.pageIds || []);
-      await Exams.removeForBook(b.id);
-      const cards = (await DB.all('cards')).filter(c => c.bookId === b.id).map(c => c.id);
-      if (cards.length) await DB.delMany('cards', cards);
+      // بقايا ميزة المراجعة والامتحانات القديمة لهالكتاب
+      for (const st of LEGACY_STORES) { const old = (await DB.all(st)).filter(x => x.bookId === b.id).map(x => x.id); if (old.length) await DB.delMany(st, old); }
     } else {
       await Media.del(collectBlobs(item.page));
       await IdeaWeb.removeForPages([item.page.id]);
-      const ids = []; (item.page.html || '').replace(/data-card="([^"]+)"/g, (_, id) => { ids.push(id); return ''; });
-      if (ids.length) await DB.delMany('cards', ids);
     }
     await DB.del('trash', item.id);
   },

@@ -242,7 +242,8 @@ const Rope = {
     this.knot.addEventListener('pointermove', mv); this.knot.addEventListener('pointerup', up); this.knot.addEventListener('pointercancel', up);
   },
   start(mins) {
-    this.run = { total: mins * 60e3, end: Date.now() + mins * 60e3, paused: 0 };
+    // المادة: من الكتاب اللي إنت فيه (لحساب ساعات كل مادة)
+    this.run = { total: mins * 60e3, end: Date.now() + mins * 60e3, paused: 0, sid: Reader.book ? Library.sid(Reader.book) : NO_SUBJECT };
     this.save(); this.swing(); this.startTick();
     if (!Study.session) Study.sessionStart(mins);
     Toast.show({ icon: 'timer', text: `بدأت جلسة الدراسة: ${mins} دقيقة. ركّز… وأنا بنبهك`, timeout: 2600 });
@@ -260,7 +261,10 @@ const Rope = {
     if (!this.run.paused && rem <= 0) this.finish();
   },
   save() { localStorage.setItem('rope', JSON.stringify(this.run)); },
-  stop() { Study.sessionEnd(false); clearInterval(this.iv); this.run = null; localStorage.removeItem('rope'); this.label(''); $('#rope').classList.remove('running', 'paused'); this.retract(); },
+  stop() {
+    // الدقايق اللي درستها فعلاً (الإيقاف المؤقت ما بينحسب) — حتى لو وقّفت قبل الوقت
+    if (this.run) Study.logMinutes((this.run.total - this.remaining()) / 60e3, this.run.sid);
+    Study.sessionEnd(false); clearInterval(this.iv); this.run = null; localStorage.removeItem('rope'); this.label(''); $('#rope').classList.remove('running', 'paused'); this.retract(); },
   finish() {
     Study.sessionEnd(true); // بيسألك شو تعلمت وبيحفظه بيومياتك
     this.stop();
@@ -328,7 +332,7 @@ const AutoBackup = {
   // بصمة صغيرة للمكتبة: ما بنكتب نسخة إذا ما تغيّر شي
   async sig() {
     const books = await DB.all('books');
-    const n = await Promise.all(['plans', 'exams', 'cards', 'journal', 'subjects', 'files', 'links'].map(s => DB.all(s).then(x => x.length)));
+    const n = await Promise.all(['plans', 'journal', 'subjects', 'files', 'links'].map(s => DB.all(s).then(x => x.length)));
     return books.length + ':' + Math.max(0, ...books.map(b => b.updated || 0)) + ':' + n.join(',');
   },
   async run(force = false, ask = false) {
@@ -354,6 +358,18 @@ const AutoBackup = {
     Toast.show({ icon: 'download', title: 'النسخ الاحتياطي التلقائي بدّه موافقتك', text: `ليكمّل يحفظ بمجلد «${this.c.dir || ''}».`, timeout: 15000, actions: [{ label: 'لاحقاً' }, { label: 'اسمح', primary: true, act: () => this.run(true, true).then(r => { if (r === 'ok') Toast.show({ icon: 'check', text: 'انحفظت نسخة اليوم ✓', timeout: 2500 }); }) }] });
   },
   noteManual() { this.c.last = Date.now(); Settings.save(); },
+  // «افتح آخر نسخة»: أحدث ملف بالمجلد (مثلاً جهازك الثاني حفظه بـ OneDrive) — الكتب الأحدث بتتحدّث، والجديدة بتنضاف
+  async restoreLatest() {
+    const h = await this.dir();
+    if (!h) { Toast.show({ icon: 'download', text: 'اختار مجلد النسخ الاحتياطي أول', timeout: 3000 }); return null; }
+    const o = { mode: 'readwrite' };
+    if ((await h.queryPermission(o)) !== 'granted' && (await h.requestPermission(o)) !== 'granted') return null;
+    const names = []; for await (const [nm, e] of h.entries()) if (e.kind === 'file' && this.NAME.test(nm)) names.push(nm);
+    if (!names.length) { Toast.show({ icon: 'download', text: 'ما في نسخ بهالمجلد لسا', timeout: 3000 }); return null; }
+    const latest = names.sort().pop();
+    const file = await (await h.getFileHandle(latest)).getFile();
+    return Backup.importFile(file);
+  },
   // بدون مجلد: كل أسبوع تذكير (بس إذا في كتب)
   async remind() {
     const c = this.c, ref = c.last || c.since || Date.now();
@@ -481,7 +497,33 @@ const Reminders = {
 
 /* ============ التصدير PDF ============ */
 const Exporter = {
-  async pdf() {
+  // قبل الطباعة: كل الدفتر، أو الصفحتين اللي قدامك، أو من صفحة لصفحة (مثلاً الفصل الثالث بس)
+  choose() {
+    const R = Reader; if (!R.book) return;
+    Editor.flushAll();
+    const empty = p => !p.html && !(p.stickies || []).length && !(p.attach || []).length;
+    let last = R.pages.length - 1; while (last > 0 && empty(R.pages[last])) last--;
+    const s0 = Math.max(0, 2 * R.s), s1 = Math.min(last, s0 + 1);
+    const n = el(`<form class="prt" autocomplete="off">
+      <div class="jf-head">${ic('pdf')}<div><h3>طباعة / PDF</h3><p class="muted">من نافذة الطباعة اختار «حفظ كـ PDF» إذا بدك ملف.</p></div></div>
+      <label class="prt-o"><input type="radio" name="w" value="all" checked> <span><b>كل الدفتر</b> <small>${last + 1} صفحة مع الغلاف</small></span></label>
+      ${R.s >= 0 ? `<label class="prt-o"><input type="radio" name="w" value="here"> <span><b>الصفحات اللي قدامي</b> <small>${s0 + 1}${s1 > s0 ? '–' + (s1 + 1) : ''}</small></span></label>` : ''}
+      <label class="prt-o"><input type="radio" name="w" value="range"> <span><b>من صفحة</b> <input class="inp prt-n" type="number" name="from" min="1" max="${last + 1}" value="${s0 + 1}"> <b>لـ</b> <input class="inp prt-n" type="number" name="to" min="1" max="${last + 1}" value="${Math.min(last + 1, s0 + 4)}"></span></label>
+      <div class="row end"><button type="button" class="btn ghost" data-a="cancel">إلغاء</button><button class="btn primary">${ic('pdf')} اطبع</button></div></form>`);
+    const m = Modal.open(n, { cls: 'sm' });
+    $$('.prt-n', n).forEach(i => i.addEventListener('focus', () => { n.w.value = 'range'; }));
+    $('[data-a=cancel]', n).onclick = () => m.close();
+    n.onsubmit = e => {
+      e.preventDefault();
+      const w = n.w.value;
+      let range = null;
+      if (w === 'here') range = { from: s0, to: s1 };
+      else if (w === 'range') { const a = clamp((+n.from.value || 1) - 1, 0, last), b = clamp((+n.to.value || 1) - 1, 0, last); range = { from: Math.min(a, b), to: Math.max(a, b) }; }
+      m.close();
+      setTimeout(() => this.pdf(range), 250);
+    };
+  },
+  async pdf(range = null) {
     const R = Reader;
     if (!R.book || this.busy) return;
     this.busy = true;
@@ -498,8 +540,10 @@ const Exporter = {
     let last = R.pages.length - 1;
     while (last > 0 && empty(R.pages[last])) last--;
     const add = (node, cls = '') => { const s = el(`<section class="pp ${cls}"></section>`); s.append(node); box.append(s); return s; };
-    add(R.coverPage('right'), 'pp-cover').style.setProperty('--cvbg', (R.book.cover && R.book.cover.color) || '#1d2b53');
-    for (let i = 0; i <= last; i++) add(R.pageEl(i, false, R.sideOfIndex(i)));
+    // الغلاف بس لما تطبع الدفتر كله
+    if (!range) add(R.coverPage('right'), 'pp-cover').style.setProperty('--cvbg', (R.book.cover && R.book.cover.color) || '#1d2b53');
+    const from = range ? range.from : 0, to = range ? Math.min(range.to, R.pages.length - 1) : last;
+    for (let i = from; i <= to; i++) add(R.pageEl(i, false, R.sideOfIndex(i)));
     $$('figure.media video, .sticky.video video', box).forEach(vd => vd.replaceWith(el(`<div class="vid-ph">${ic('film')}<span>فيديو مرفق داخل الدفتر</span></div>`)));
     $$('.flipzone', box).forEach(x => x.remove());
     Toast.show({ icon: 'pdf', title: 'تصدير PDF', text: 'من نافذة الطباعة اختر «حفظ كـ PDF» أو «Microsoft Print to PDF» واضغط حفظ.', timeout: 6000 });
@@ -561,11 +605,12 @@ const Backup = {
     const blobs = [];
     for (const id of ids2) { const r = await DB.get('blobs', id); if (r) blobs.push({ id, type: r.type, data: await blobToDataURL(r.blob) }); }
     const pids = new Set(pages.map(p => p.id));
-    const blob = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pids.has(x.a) && pids.has(x.b)), exams: (await DB.all('exams')).filter(x => books.some(b => b.id === x.bookId)), subjects, files, plans })], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pids.has(x.a) && pids.has(x.b)), subjects, files, plans })], { type: 'application/json' });
     return { blob, books };
   },
-  async importFile() {
-    const f = await pickFile('.json,application/json');
+  // استعادة: من ملف بتختاره، أو ملف جاهز (مثلاً آخر نسخة بمجلد النسخ التلقائي)
+  async importFile(file = null) {
+    const f = file || await pickFile('.json,application/json');
     if (!f) return;
     let data;
     try { data = JSON.parse(await f.text()); if (data.app !== 'daftari') throw 0; }
@@ -578,20 +623,30 @@ const Backup = {
       await DB.put('blobs', { id: bl.id, blob, type: bl.type || blob.type, size: blob.size });
     }
     for (const x of data.links || []) if (!(await DB.get('links', x.id))) await DB.put('links', x);
-    for (const x of data.exams || []) if (!(await DB.get('exams', x.id))) await DB.put('exams', x);
     for (const st of ['subjects', 'files', 'plans']) for (const x of data[st] || []) if (!(await DB.get(st, x.id))) await DB.put(st, x);
     await IdeaWeb.load();
-    let added = 0, skipped = 0;
+    let added = 0, skipped = 0, updated = 0;
     for (const b of data.books || []) {
-      if (have.has(b.id)) { skipped++; continue; }
+      if (have.has(b.id)) {
+        // نفس الكتاب: إذا النسخة أحدث (كتبت عليه بجهاز ثاني) بنحدّثه، وإلا بنتركه
+        const mine = existing.find(x => x.id === b.id);
+        if (!((b.updated || 0) > (mine.updated || 0))) { skipped++; continue; }
+        if (Reader.book && Reader.book.id === b.id) Reader.close();
+        const gone = (mine.pageIds || []).filter(id => !(b.pageIds || []).includes(id));
+        if (gone.length) await DB.delMany('pages', gone);
+        await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id).map(p => ({ ...p, html: stripAns(p.html) })));
+        await DB.put('books', b);
+        updated++; continue;
+      }
       let t = b.title, n = 2;
       while (existing.some(x => normTitle(x.title) === normTitle(t))) t = `${b.title} (${n++})`;
       b.title = t;
-      await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id));
+      await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id).map(p => ({ ...p, html: stripAns(p.html) })));
       await DB.put('books', b);
       existing.push(b); added++;
     }
-    Toast.show({ icon: 'upload', text: `تمت استعادة ${added} كتاب` + (skipped ? ` (${skipped} موجود مسبقاً)` : '') });
+    Toast.show({ icon: 'upload', text: `تمت استعادة ${added} كتاب` + (updated ? `، وتحدّث ${updated}` : '') + (skipped ? ` (${skipped} زي ما هو)` : '') });
     Library.load();
+    return { added, updated, skipped };
   },
 };

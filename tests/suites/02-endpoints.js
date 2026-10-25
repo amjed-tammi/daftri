@@ -47,14 +47,11 @@ const SUITE = {
       expect(m.map.length).toBe(m.n.length);
       expect(htmlText('<p>سطر</p><p>two</p>').replace(/\s+/g, ' ').trim()).toBe('سطر two');
     });
-    await T.test('أسئلة المراجعة: مزامنة البطاقات مع الصفحات (إضافة الناقص وحذف اليتيم)', async () => {
-      const b = await T.makeBook('بطاقات', { htmls: ['<p>س؟ <span class="ans" data-card="cA">ج</span></p>', '', '', ''] });
-      await DB.put('cards', { id: 'cORPHAN', bookId: b.id, level: 0, due: 0 });
-      const pages = await DB.getMany('pages', b.pageIds);
-      const due = await Study.dueCards(b, pages);
-      expect(due.map(c => c.id)).toEqual(['cA']);
-      expect(await DB.get('cards', 'cORPHAN')).toBe(undefined);
-      expect(REVIEW_STEPS).toEqual([1, 3, 7, 16, 35, 80]);
+    await T.test('الأجوبة المغطّاة من ميزة المراجعة القديمة بترجع نص عادي (والتنسيق جوّاها بيضل)', () => {
+      expect(stripAns('<p>س؟ <span class="ans" data-card="cA">ج <b>مهم</b></span> وبعد</p>')).toBe('<p>س؟ ج <b>مهم</b> وبعد</p>');
+      expect(stripAns('<p>عادي</p>')).toBe('<p>عادي</p>');
+      expect(stripAns('')).toBe('');
+      expect(typeof Exams === 'undefined' && typeof Study.mark === 'undefined', 'الميزة انشالت').toBeTruthy();
     });
     await T.test('شبكة الأفكار: ربط وفك ومنع التكرار', async () => {
       await IdeaWeb.load();
@@ -113,40 +110,26 @@ const SUITE = {
       Reminders.list = Reminders.list.filter(x => x !== r); Reminders.save();
       expect(JSON.parse(localStorage.getItem('reminders')).length).toBe(0);
     });
-    await T.test('الامتحانات: استيراد JSON (صيغة الذكاء الاصطناعي) وتصديرها', async () => {
-      const b = await T.makeBook('امتحانات JSON', { htmls: ['<h2>الصفحة 1</h2>', '<h2>الصفحة 2</h2>', '', ''] });
-      await Reader.open(b.id, 0); await T.sleep(400); T.quiet();
-      const json = { title: 'AI Quiz', questions: [{ q: 'كم؟', choices: ['1', '2'], correct: 1, page: 2, explain: 'شرح' }, { q: 'ناقص', choices: ['x'] }] };
-      pickFile = async () => new File([JSON.stringify(json)], 'q.json', { type: 'application/json' });
-      await Exams.importFile(); await T.sleep(300);
-      pickFile = realPick;
-      const ex = (await Exams.all(b.id))[0];
-      expect(ex.questions.length, 'السؤال الناقص لازم ينرفض').toBe(1);
-      expect(ex.questions[0].pageId).toBe(b.pageIds[1]);
-      downloadBlob = (blob, name) => { downloaded = { blob, name }; };
-      Exams.exportFile(ex);
-      downloadBlob = realDl;
-      const back = JSON.parse(await downloaded.blob.text());
-      expect(back.questions[0].page).toBe(2); expect(back.questions[0].correct).toBe(1);
-      T.clean(); Reader.close(); await T.sleep(200);
-    });
-    await T.test('المشاركة: تغليف وضغط وفك واستيراد كنسخة جديدة (مع البطاقات والروابط والامتحانات)', async () => {
+    await T.test('المشاركة: تغليف وضغط وفك واستيراد كنسخة جديدة (مع الصور والروابط)، وملف قديم فيه أسئلة مراجعة بيفتح نص عادي', async () => {
       const mid = await Media.save(new Blob(['img'], { type: 'image/png' }));
-      const b = await T.makeBook('مشاركة', { htmls: ['<p>س <span class="ans" data-card="cS1">ج</span></p>', '<p>ب</p>', '', ''] });
+      const b = await T.makeBook('مشاركة', { htmls: ['<p>س <b>ج</b></p>', '<p>ب</p>', '', ''] });
       const p0 = await DB.get('pages', b.pageIds[0]); p0.stickies = [{ id: 's1', kind: 'photo', blob: mid, x: 10, y: 10, w: 120 }]; await DB.put('pages', p0);
-      await DB.put('cards', { id: 'cS1', bookId: b.id, level: 2, due: 0 });
       await IdeaWeb.add(b.pageIds[0], b.id, b.pageIds[1], b.id);
-      await DB.put('exams', { id: 'eS', bookId: b.id, title: 'T', questions: [{ id: 'q', q: 'q', choices: ['a', 'b'], correct: 0, pageId: b.pageIds[1] }], attempts: [] });
       const data = await Share.pack(b.id);
+      expect('exams' in data || 'cards' in data, 'ما في امتحانات ولا بطاقات بالملف').toBeFalsy();
       const z = await Share.gzip(JSON.stringify(data));
       expect(new Uint8Array(await z.slice(0, 2).arrayBuffer())[0]).toBe(0x1f);
       const [nb] = await Share.importData(await Share.readFile(z));
       expect(nb.id === b.id).toBeFalsy(); expect(nb.title).toBe('مشاركة (2)');
       const np = await DB.getMany('pages', nb.pageIds);
-      expect(np[0].html).toContain('data-card="c'); expect(np[0].html.includes('cS1')).toBeFalsy();
+      expect(np[0].html).toBe('<p>س <b>ج</b></p>');
+      expect(np[0].stickies[0].blob).toBe(mid);
       expect(IdeaWeb.of(nb.pageIds[0]).length).toBe(1);
-      const ex = (await DB.all('exams')).find(x => x.bookId === nb.id);
-      expect(ex.questions[0].pageId).toBe(nb.pageIds[1]);
+      // ملف .daftar من نسخة قديمة فيه سؤال مراجعة
+      const old = JSON.parse(JSON.stringify(data)); old.books[0].title = 'قديم'; old.pages[0].html = '<p>س؟ <span class="ans" data-card="cX">الجواب</span></p>'; old.cards = [{ id: 'cX', bookId: old.books[0].id }];
+      const [ob] = await Share.importData(old);
+      const op = await DB.get('pages', ob.pageIds[0]);
+      expect(op.html).toBe('<p>س؟ الجواب</p>');
       T.info({ size: z.size + ' bytes' });
     });
     await T.test('النسخ الاحتياطي: تصدير واستيراد بدون تكرار', async () => {

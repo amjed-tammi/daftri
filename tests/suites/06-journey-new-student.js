@@ -30,30 +30,13 @@ const SUITE = {
         await T.sleep(300); Editor.flushAll();
         expect(Reader.pages[1].html).toContain('ملاحظتي');
       });
-      await T.test('بيراجع سؤال اليوم (البطاقة التجريبية)', async () => {
-        await Study.startReview(); await T.sleep(800);
-        await T.waitFor(() => document.querySelector('#reviewbar [data-rv=reveal]'));
-        await T.mouse.click('#reviewbar [data-rv=reveal]');
-        await T.mouse.click('#reviewbar [data-rv=ok]');
-        await T.waitFor(() => !Study.rv, 4000, 'نهاية المراجعة');
-        expect(Study.days()).toContain(ymd());
-      });
-      await T.test('بيعمل امتحان من صفحة ويحلّه', async () => {
-        const l = Editor.live.get(0);
-        // نضيف سؤال مراجعة ثاني حتى يطلع للامتحان خيارات
-        const p = l.c.querySelector('p'); const t = p.firstChild, rg = document.createRange(); rg.setStart(t, 0); rg.setEnd(t, 3);
-        await Study.mark(rg, l); await T.sleep(200);
-        Exams.editor(null, { pageIndex: 0 }); await T.sleep(300);
-        await T.mouse.click('.ex-ed [data-a=save]');
-        await T.waitFor(async () => (await Exams.all(Reader.book.id)).length === 1);
-        Exams.take((await Exams.all(Reader.book.id))[0]); await T.sleep(400);
-        while (Exams.run && document.querySelector('.ex-opt')) { const q = Exams.run.qs[Exams.run.i]; await T.mouse.click(`.ex-opt[data-j="${q.correct}"]`); await T.mouse.click('[data-a=next]'); }
-        await T.waitFor(() => document.querySelector('.ex-ring'));
-        expect(document.querySelector('.ex-ring b').textContent).toBe('100%');
-        Exams.close();
+      await T.test('بيطلّع ورقة ليلة الامتحان من الكتاب التجريبي (فيها الهايلايت)', async () => {
+        Editor.flushAll();
+        await Sheet.open(); await T.sleep(300);
+        expect(document.querySelector('.sheet-paper').textContent).toContain('HTML لغة لبناء هيكل صفحات الويب');
+        T.clean();
       });
       await T.test('بيبدأ جلسة دراسة بالحبل، وبآخرها بيكتب شو تعلّم', async () => {
-        await T.waitFor(() => !document.querySelector('#exam'), 2000, 'إغلاق الامتحان');
         const knot = document.querySelector('#rope .knot').getBoundingClientRect();
         await T.mouse.drag(knot.left + knot.width / 2, knot.top + knot.height / 2, knot.left + knot.width / 2, knot.top + 140, 12);
         await T.waitFor(() => Rope.run, 2000, 'بدء الجلسة');
@@ -72,9 +55,7 @@ const SUITE = {
         expect(!!b).toBeTruthy();
         const pages = await DB.getMany('pages', b.pageIds);
         expect(pages[1].html).toContain('ملاحظتي');
-        const cards = await DB.all('cards');
-        expect(cards.some(c => c.level === 1 && c.due > Date.now())).toBeTruthy();
-        expect((await Exams.all(b.id))[0].attempts.length).toBe(1);
+        expect(Study.days()).toContain(ymd()); // نجمة اليوم من الجلسة
         expect((await DB.all('journal'))[0].text).toContain('HTML');
       });
       await T.test('ما بترجع الجولة تطلع، والنجمة موجودة بالسماء', async () => {

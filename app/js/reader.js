@@ -15,6 +15,7 @@ const Reader = {
     b.paper = { ...Settings.newPaper(), ...(b.paper || {}) };
     const recs = await DB.getMany('pages', b.pageIds);
     this.book = b;
+    const firstTime = !b.opened; // أول مرة بينفتح هالدفتر
     b.opened = Date.now(); DB.put('books', b); // لـ«كمّل من وين وقفت» بالمكتبة
     this.pages = recs.map((p, i) => p || { id: b.pageIds[i], bookId: b.id, html: '', stickies: [], attach: [] });
     if (this.pages.length % 2) this.addPages(1, false);
@@ -36,6 +37,8 @@ const Reader = {
     Music.onBookOpen(b);
     Sound.warm(); // فتح الكتاب كان بضغطة، فمنجهّز صوت التقليب من هلق
     Tour.maybe('book'); // جولة الكتاب أول مرة
+    // دفتر بينفتح لأول مرة وهو مسكّر: الغلاف بيتقلّب لحاله والمؤشر بيكون جاهز للكتابة (إلا إذا الجولة رح تشرح التقليب)
+    if (firstTime && this.s < 0 && gotoPage == null && !Tour.willRun('book')) setTimeout(() => { if (this.book === b && this.s < 0 && !Tour.active) this.turn(1).then(() => Editor.focusPage(0)); }, 650);
   },
   close() {
     Study.onBookClose();
@@ -92,7 +95,7 @@ const Reader = {
   applyPaper() {
     const bk = $('#book');
     FontKit.apply(this.book.paper);
-    bk.className = this.paperClasses() + (this.s < 0 ? ' closed' : '') + (Study.exam ? ' exam' : '');
+    bk.className = this.paperClasses() + (this.s < 0 ? ' closed' : ''); document.body.classList.toggle('book-closed', this.s < 0);
     bk.removeAttribute('style');
     const v = this.paperVars();
     for (const k in v) bk.style.setProperty(k, v[k]);
@@ -135,7 +138,7 @@ const Reader = {
       <div class="pnum">${i + 1}</div><div class="gutter"></div>
       ${live ? '<div class="flipzone"></div>' : ''}</div>`);
     const c = $('.content', pg);
-    c.innerHTML = p.html || '';
+    c.innerHTML = stripAns(p.html) || '';
     Editor.listDirections(c);
     if (!live) $$('video', c).forEach(v => { v.preload = 'none'; v.removeAttribute('controls'); });
     Stickies.renderAll(pg, p, live);
@@ -162,7 +165,7 @@ const Reader = {
     const fwd = this.fwdSide(), back = this.backSide();
     this.fill(fwd, this.idx(this.s, 'fwd'), true);
     this.fill(back, this.idx(this.s, 'back'), true);
-    $('#book').classList.toggle('closed', this.s < 0);
+    $('#book').classList.toggle('closed', this.s < 0); document.body.classList.toggle('book-closed', this.s < 0);
     this.updateBars();
     requestAnimationFrame(() => Editor.reflowAll());
   },
@@ -181,7 +184,7 @@ const Reader = {
     $('.front', leaf).prepend(this.faceEl(front, side));
     $('.back', leaf).prepend(this.faceEl(back, other));
     $('#bookInner').append(leaf);
-    $('#book').classList.toggle('closed', to < 0);
+    $('#book').classList.toggle('closed', to < 0); document.body.classList.toggle('book-closed', to < 0);
     $('#book').classList.add('turning');
     return leaf;
   },
@@ -229,7 +232,10 @@ const Reader = {
     const side = dir > 0 ? this.fwdSide() : this.backSide();
     const leaf = this.makeLeaf(side, dir, to);
     Sound.flip();
+    const bk = this.book;
     await this.animate(leaf, 0, 1, 720);
+    // انسكّر الكتاب (أو انفتح غيره) والصفحة عم تتقلّب: منوقف بهدوء
+    if (this.book !== bk) { leaf.remove(); $('#book').classList.remove('turning'); this.busy = false; return; }
     this.s = to;
     this.finishTurn(leaf);
     if (this.narrow()) this.layout();

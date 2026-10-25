@@ -93,6 +93,7 @@ const ICONS = {
   cut: '<circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8 16 19 4M16 16 5 4"/>',
   paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11h6M9 15h4"/>',
   heading: '<path d="M6 4v16M18 4v16M6 12h12"/>',
+  math: '<path d="M4 6h7M7.5 2.5v7M4 17h7M13 5l6 6M19 5l-6 6M14 15.5h5M14 19.5h5"/>',
   list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
   olist: '<path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v5M3.5 15.5a1.5 1.5 0 0 1 3 .5L4 19h3"/>',
   quote: '<path d="M6 17c-1.5 0-3-1.2-3-3.5C3 9 6 6.5 9 6M15 17c-1.5 0-3-1.2-3-3.5C12 9 15 6.5 18 6"/>',
@@ -126,10 +127,20 @@ const DB = {
   open() {
     if (this._p) return this._p;
     this._p = new Promise((res, rej) => {
-      const r = indexedDB.open('daftari', 6);
+      const r = indexedDB.open('daftari', 7);
       r.onupgradeneeded = e => {
         const d = r.result;
         for (const s of ['books', 'pages', 'blobs', 'trash', 'cards', 'journal', 'links', 'exams', 'subjects', 'files', 'plans', 'meta']) if (!d.objectStoreNames.contains(s)) d.createObjectStore(s, { keyPath: 'id' });
+        // نسخة 7: ميزة أسئلة المراجعة والامتحانات انشالت (بترجع مع الـAI): الأجوبة المغطّاة بكل الكتب بترجع نص عادي.
+        //   مخازن cards و exams بتضل (بيانات قديمة ما منمسحها)، بس ما بينضاف إلها شي.
+        if (e.oldVersion && e.oldVersion < 7) {
+          r.transaction.objectStore('pages').openCursor().onsuccess = ev => {
+            const c = ev.target.result; if (!c) return;
+            const h = stripAns(c.value.html);
+            if (h !== c.value.html) { c.value.html = h; c.update(c.value); }
+            c.continue();
+          };
+        }
         // نسخة 6: meta (مثلاً مجلد النسخ الاحتياطي التلقائي — إذن المتصفح بينحفظ هون)
         // نسخة 5: المواد فوق الكتب. كل كتاب قديم بيروح لـ«بدون مادة» (ما بينحذف ولا شي)
         if (e.oldVersion < 5) {
@@ -325,7 +336,10 @@ const Toast = {
       $('.t-acts', t).append(b);
     });
     if (!actions.length) t.onclick = close;
-    $('#toasts').append(t);
+    // مكان ثابت ما بينطّ: جوّا الكتاب أو فوق نافذة تحت، بالمكتبة فوق
+    const box = $('#toasts'), inModal = !!$('.modal-back'), inBook = !$('#reader').hidden;
+    box.classList.toggle('low', inModal || inBook); box.classList.toggle('modal', inModal);
+    box.append(t);
     // ما بنخلي الرسائل تتراكم وتغطي الشاشة: أقصى شي 3 (الأقدم بيروح)
     const all = $$('#toasts .toast:not(.gone)');
     all.slice(0, Math.max(0, all.length - 3)).forEach(o => { o.classList.add('gone'); o.classList.remove('in'); setTimeout(() => o.remove(), 300); });
@@ -334,6 +348,16 @@ const Toast = {
     return close;
   },
 };
+
+// مخازن ميزة المراجعة والامتحانات (انشالت، وبترجع مع الـAI): بتضل بالقاعدة حتى ما تنمسح بيانات حدا، بس ما بينكتب فيها
+const LEGACY_STORES = ['cards', 'exams'];
+// الأجوبة المغطّاة (من ميزة المراجعة القديمة) ← نص عادي بمكانه
+function stripAns(html) {
+  if (!html || !/class="ans\b/.test(html)) return html;
+  const t = document.createElement('template'); t.innerHTML = html;
+  t.content.querySelectorAll('.ans').forEach(a => a.replaceWith(...a.childNodes));
+  return t.innerHTML;
+}
 
 /* ============ تحميل وقت الحاجة ============
    ملفات كبيرة وما بتلزم كل يوم (مثل قارئ وورد/إكسل/PDF) ما بتنحمّل مع الإقلاع: أول مرة بتلزم بس.

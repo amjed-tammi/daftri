@@ -41,7 +41,7 @@ const SUITE = {
       Library.openForm(Reader.book); await T.sleep(300); opened.push(...check()); T.clean();
       Reminders.panel(document.querySelector('#btnNight')); document.querySelector('.rem-new').open = true; await T.sleep(200); opened.push(...check()); T.clean();
       await Finder.open(); await T.sleep(300); opened.push(...check()); T.clean();
-      Exams.editor(null); await T.sleep(300); opened.push(...check()); T.clean();
+      await Cal.open({ date: ymd() }); await T.sleep(300); opened.push(...check()); T.clean();
       expect(opened.map(i => i.name || i.placeholder).join(', '), 'خانات بدون اتجاه تلقائي:').toBe('');
     });
     await T.test('العربي يمين والإنجليزي يسار بنفس الكتاب تلقائياً', () => {
@@ -58,7 +58,7 @@ const SUITE = {
       await tryOpen('الموسيقى', () => Music.panel(document.querySelector('#btnSound')), '.pop');
       await tryOpen('التذكيرات', () => Reminders.panel(document.querySelector('#btnNight')), '.pop');
       await tryOpen('الفهرس', () => Finder.index(document.querySelector('#tbIndex')), '.pop');
-      await tryOpen('الامتحانات', () => Exams.panel(), '.modal');
+      await tryOpen('ورقة ليلة الامتحان', () => Sheet.open(), '.modal');
       await tryOpen('الإعدادات العامة', () => Settings.panel(), '.modal');
       await T.viewport(1024, 650);
       await tryOpen('الإعدادات على شاشة صغيرة', () => Settings.panel(), '.modal');
@@ -70,7 +70,6 @@ const SUITE = {
       const bad = [];
       Music.panel(document.querySelector('#btnSound')); await T.sleep(150); if (!document.querySelector('.mu-empty')) bad.push('الموسيقى'); T.clean();
       Reminders.panel(document.querySelector('#btnNight')); await T.sleep(150); if (!document.querySelector('.rem-empty')) bad.push('التذكيرات'); T.clean();
-      await Exams.panel(); await T.sleep(200); if (!document.querySelector('.exams .empty-j')) bad.push('الامتحانات'); T.clean();
       await Study.journalPanel(); await T.sleep(200); if (!document.querySelector('.empty-j')) bad.push('اليوميات'); T.clean();
       await Trash.panel(); await T.sleep(200); if (!document.querySelector('.empty-j')) bad.push('السلة'); T.clean();
       expect(bad.join(', '), 'بدون إرشاد:').toBe('');

@@ -16,7 +16,7 @@ const SUITE = {
     });
     await T.test('أزرار الشريط العلوي بالكتاب: كل زر بيفتح شي', async () => {
       await openBook();
-      const cases = [['#tbIndex', '.toc'], ['#tbWeb', '#iw'], ['#tbExam', '.exams'], ['#tbReview', '.menu'], ['#tbSearch', '.finder'], ['#tbInsert', '.menu'], ['#tbPaper', '.paper-panel'], ['#tbMore', '.menu']];
+      const cases = [['#tbIndex', '.toc'], ['#tbWeb', '#iw'], ['#tbSearch', '.finder'], ['#tbInsert', '.menu'], ['#tbPaper', '.paper-panel'], ['#tbMore', '.menu']];
       const bad = [];
       for (const [btn, want] of cases) {
         T.clean(); document.querySelector('#iw [data-a=close]')?.click(); await T.sleep(400);

@@ -96,11 +96,11 @@ const SUITE = {
         Settings.set('profile', 'writer'); Settings.d.app.studyTools = null; Onboard.applyProfile();
         const b = (await DB.all('books'))[0];
         await Reader.open(b.id, 0); await T.sleep(700); T.quiet(); Bars.show('#topbar'); await T.sleep(400);
-        expect(document.querySelector('#tbExam').offsetParent).toBe(null);
+        expect(document.querySelector('#tbWeb').offsetParent).toBe(null);
         expect(!!document.querySelector('#tbInsert').offsetParent).toBeTruthy();
         await T.shot('writer-toolbar');
         Settings.set('studyTools', true); Onboard.applyProfile(); await T.sleep(100);
-        expect(!!document.querySelector('#tbExam').offsetParent).toBeTruthy();
+        expect(!!document.querySelector('#tbWeb').offsetParent).toBeTruthy();
       });
     },
   ],

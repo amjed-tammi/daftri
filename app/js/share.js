@@ -13,10 +13,8 @@ const Share = {
     const blobs = [];
     for (const id of ids) { const r = await DB.get('blobs', id); if (r) blobs.push({ id, type: r.type, data: await blobToDataURL(r.blob) }); }
     const links = (await DB.all('links')).filter(x => pid.has(x.a) && pid.has(x.b));
-    const exams = (await DB.all('exams')).filter(x => x.bookId === bookId);
-    const cards = (await DB.all('cards')).filter(x => x.bookId === bookId);
     const book = { ...b }; delete book.music; // الموسيقى ملفات عندك إنت، ما بتنشارك
-    return { app: 'daftari', kind: 'book', v: 2, at: Date.now(), books: [book], pages, blobs, links, exams, cards };
+    return { app: 'daftari', kind: 'book', v: 2, at: Date.now(), books: [book], pages, blobs, links };
   },
   async gzip(text) { return new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).blob(); },
   async gunzip(blob) { return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).text(); },
@@ -47,22 +45,18 @@ const Share = {
       while (existing.some(x => normTitle(x.title) === normTitle(t))) t = `${ob.title} (${k++})`;
       nb.title = t;
       if (nb.series && nb.series.name && existing.some(x => x.series && normTitle(x.series.name) === normTitle(nb.series.name) && +x.series.part === +nb.series.part)) nb.series = { ...nb.series, name: nb.series.name + ' (مشارَك)' };
-      const pmap = new Map(), cmap = new Map();
+      const pmap = new Map();
       const pages = (data.pages || []).filter(p => (ob.pageIds || []).includes(p.id));
-      (data.cards || []).filter(c => c.bookId === ob.id).forEach(c => cmap.set(c.id, 'c' + uid()));
       pages.forEach(p => pmap.set(p.id, 'p' + uid()));
       const np = pages.map(p => {
-        let html = p.html || '';
-        cmap.forEach((n, o) => { html = html.split(`data-card="${o}"`).join(`data-card="${n}"`); });
+        const html = stripAns(p.html || ''); // ملفات قديمة فيها أسئلة مراجعة: نص عادي
         return { ...p, id: pmap.get(p.id), bookId: nb.id, html };
       });
       nb.pageIds = (ob.pageIds || []).map(id => pmap.get(id)).filter(Boolean);
       for (const bl of data.blobs || []) if (!(await DB.get('blobs', bl.id))) { const blob = dataURLToBlob(bl.data); await DB.put('blobs', { id: bl.id, blob, type: bl.type || blob.type, size: blob.size }); }
       await DB.putMany('pages', np);
       await DB.put('books', nb);
-      for (const c of (data.cards || []).filter(c => c.bookId === ob.id)) await DB.put('cards', { ...c, id: cmap.get(c.id), bookId: nb.id, due: Date.now() });
       for (const x of (data.links || []).filter(x => pmap.has(x.a) && pmap.has(x.b))) await DB.put('links', { ...x, id: 'w' + uid(), a: pmap.get(x.a), b: pmap.get(x.b), ab: nb.id, bb: nb.id });
-      for (const e of (data.exams || []).filter(e => e.bookId === ob.id)) await DB.put('exams', { ...e, id: 'e' + uid(), bookId: nb.id, attempts: [], questions: (e.questions || []).map(q => ({ ...q, pageId: pmap.get(q.pageId) || null })) });
       existing.push(nb); out.push(nb);
     }
     await IdeaWeb.load();

@@ -1,5 +1,6 @@
 'use strict';
-/* ============ شبكة الأفكار: ربط الصفحات ببعض، والشبكة بتنبني من الخيوط نفسها ============ */
+/* ============ شبكة الأفكار: كل صفحة نجمة، والروابط خطوط ضوء بين النجوم (متل الكوكبات) ============
+   مرّر الماوس على نجمة بتشوف شو فيها، اضغط عليها بتفتح الصفحة، اسحب من نجمة لنجمة بتربطهم. */
 const IdeaWeb = {
   links: [],
 
@@ -8,12 +9,50 @@ const IdeaWeb = {
   other(x, pageId) { return x.a === pageId ? { pageId: x.b, bookId: x.bb } : { pageId: x.a, bookId: x.ab }; },
   linked(p1, p2) { return this.links.find(x => (x.a === p1 && x.b === p2) || (x.a === p2 && x.b === p1)) || null; },
 
-  // الكتب اللي مسموح الربط معها: نفس الكتاب + كتب نفس السلسلة
+  // الكتب اللي مسموح الربط معها: نفس الكتاب + كتب نفس السلسلة + كتب نفس المادة
   async scopeBooks(book) {
     const all = await DB.all('books');
-    if (!book.series || !book.series.name) return [all.find(b => b.id === book.id) || book];
-    const k = normTitle(book.series.name);
-    return all.filter(b => b.id === book.id || (b.series && normTitle(b.series.name) === k)).sort((a, b) => (+(a.series && a.series.part) || 0) - (+(b.series && b.series.part) || 0));
+    const k = book.series && book.series.name ? normTitle(book.series.name) : null;
+    const sid = book.subjectId && book.subjectId !== NO_SUBJECT ? book.subjectId : null;
+    const list = all.filter(b => b.id === book.id || (k && b.series && normTitle(b.series.name) === k) || (sid && b.subjectId === sid));
+    if (!list.some(b => b.id === book.id)) list.unshift(book);
+    // الكتاب الحالي أول، بعدين أجزاء السلسلة بترتيبها، بعدين باقي كتب المادة
+    const rank = b => b.id === book.id ? -1 : (b.series && k && normTitle(b.series.name) === k ? +(b.series.part) || 0 : 1000);
+    return list.sort((a, b) => rank(a) - rank(b));
+  },
+  scopeName(books) {
+    if (books.length === 1) return books[0].title;
+    const b = books[0];
+    if (books.every(x => x.series && b.series && normTitle(x.series.name) === normTitle(b.series.name))) return 'سلسلة ' + b.series.name;
+    const sub = b.subjectId && Library.subject && Library.subject(b.subjectId);
+    return sub ? `مادة ${sub.name} · ${books.length} كتب` : `${books.length} كتب`;
+  },
+  /* ===== اقتراحات ربط: صفحات بتحكي عن نفس الشي (كلمات مشتركة مهمة) — برمجة بدون ذكاء اصطناعي ===== */
+  STOP: new Set('في من على الى إلى عن مع هذا هذه هاد هاي هيك اللي الذي التي الذين كان كانت يكون تكون هو هي هم انت أنت انا أنا نحن كل بعض او أو ثم لكن لان لأن اذا إذا لما ما لا لم لن قد كمان بس عشان يعني فيه فيها منه منها عليه عليها بين بعد قبل حتى عند كيف ليش شو وين the and for are was were with that this from have has had not but you your they them their its into than then there what when where which who will would can could should about also more most such only other some any each been being over under very just like'.split(' ')),
+  terms(text) {
+    const out = new Map();
+    for (let w of normMap(text || '').n.split(/[^a-z0-9\u0621-\u064a]+/)) {
+      if (/^[\u0621-\u064a]/.test(w)) { w = w.replace(/^(وال|بال|فال|كال|لل|ال)(?=..)/, ''); if (w.length < 3) continue; }
+      else if (w.length < 4 || /^\d+$/.test(w)) continue;
+      if (this.STOP.has(w)) continue;
+      out.set(w, (out.get(w) || 0) + 1);
+    }
+    return out;
+  },
+  suggest(centerId, k = 4) {
+    const all = this.S.all, c = all.get(centerId); if (!c || !c.tf || !c.tf.size) return [];
+    const N = all.size, df = new Map();
+    for (const n of all.values()) if (n.tf) for (const w of n.tf.keys()) df.set(w, (df.get(w) || 0) + 1);
+    const vec = n => { const v = new Map(); let L = 0; for (const [w, f] of n.tf) { const x = (1 + Math.log(f)) * Math.log((N + 1) / (df.get(w) || 1)); if (x > 0) { v.set(w, x); L += x * x; } } return { v, L: Math.sqrt(L) || 1 }; };
+    const cv = vec(c), out = [];
+    for (const n of all.values()) {
+      if (n.id === centerId || n.empty || !n.tf || this.linked(centerId, n.id)) continue;
+      const nv = vec(n); let dot = 0; const shared = [];
+      for (const [w, x] of cv.v) { const y = nv.v.get(w); if (y) { dot += x * y; shared.push([w, x * y]); } }
+      const score = dot / (cv.L * nv.L);
+      if (score >= .12 && shared.length) out.push({ id: n.id, score, words: shared.sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]) });
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, k);
   },
   pageInfo(p, i) {
     const html = (p && p.html) || '';
@@ -131,7 +170,7 @@ const IdeaWeb = {
     const all = new Map();
     for (const [bi, b] of books.entries()) {
       const pages = await this.pagesOf(b);
-      pages.forEach((p, k) => { if (p) { const inf = this.pageInfo(p, k); all.set(p.id, { id: p.id, bookId: b.id, bi, k, title: inf.title, empty: inf.empty, tint: tints[bi % tints.length] }); } });
+      pages.forEach((p, k) => { if (p) { const inf = this.pageInfo(p, k), text = htmlText(p.html || ''); all.set(p.id, { id: p.id, bookId: b.id, bi, k, title: inf.title, snippet: inf.snippet, empty: inf.empty, tint: tints[bi % tints.length], text, tf: this.terms(text) }); } });
     }
     if (!all.has(centerId)) centerId = [...all.keys()][0];
     this.S = { books, all, centerId, tints };
@@ -146,10 +185,11 @@ const IdeaWeb = {
     for (let i = 0; i < order.length; i++) for (const nb of adj.get(order[i]) || []) if (!level.has(nb)) { level.set(nb, level.get(order[i]) + 1); parent.set(nb, order[i]); order.push(nb); }
     const nodes = order.map(id => ({ ...all.get(id), lv: level.get(id) }));
     // صفحات غير مربوطة بالمركز: بتطلع بحلقة خارجية باهتة لتقدر تربطها بالسحب
-    const lonely = [...all.values()].filter(n => !level.has(n.id) && !n.empty).slice(0, 40).map(n => ({ ...n, lv: -1 }));
+    const sug = new Set((this.S.sug = this.suggest(centerId)).map(x => x.id));
+    const lonely = [...all.values()].filter(n => !level.has(n.id) && !n.empty).sort((a, b) => (sug.has(b.id) ? 1 : 0) - (sug.has(a.id) ? 1 : 0)).slice(0, 40).map(n => ({ ...n, lv: -1 }));
     // الزوايا
     const maxLv = Math.max(0, ...nodes.map(n => n.lv));
-    const ring = lv => 250 + (lv - 1) * 200;
+    const ring = lv => 210 + (lv - 1) * 170;
     const angle = new Map([[centerId, 0]]);
     const L1 = nodes.filter(n => n.lv === 1).sort((a, b) => a.bi - b.bi || a.k - b.k);
     L1.forEach((n, i) => angle.set(n.id, -Math.PI / 2 + i * 2 * Math.PI / L1.length));
@@ -170,7 +210,7 @@ const IdeaWeb = {
     lonely.forEach((n, i) => { const a = -Math.PI / 2 + (i + .5) * 2 * Math.PI / Math.max(lonely.length, 6); n.x = Math.cos(a) * outer * 1.15; n.y = Math.sin(a) * outer * .78; n.a = a; });
     const list = [...nodes, ...lonely];
     // نبعد البطاقات المتداخلة
-    const BW = 196, BH = 84;
+    const BW = 132, BH = 58; // نجمة + اسمها تحتها
     for (let pass = 0; pass < 140; pass++) {
       let moved = false;
       for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
@@ -205,8 +245,9 @@ const IdeaWeb = {
     if (first) {
       ov = el(`<div id="iw" class="iw">
         <div class="iw-top">
-          <div class="iw-title">${ic('web')} <b>شبكة الأفكار</b> <small>${esc(S.books.length > 1 ? 'سلسلة ' + S.books[0].series.name : S.books[0].title)}</small></div>
-          <div class="iw-legend">${S.books.length > 1 ? S.books.map((b, i) => `<span><i style="background:${S.tints[i % S.tints.length]}"></i>${b.series ? 'ج' + b.series.part : ''} ${esc(b.title)}</span>`).join('') : ''}</div>
+          <div class="iw-title">${ic('web')} <b>شبكة الأفكار</b> <small>${esc(this.scopeName(S.books))}</small></div>
+          <label class="iw-find">${ic('search')}<input type="search" dir="auto" placeholder="دوّر على صفحة…" aria-label="دوّر بالشبكة"></label>
+          <div class="iw-legend">${S.books.length > 1 ? S.books.map((b, i) => `<span><i style="background:${S.tints[i % S.tints.length]}"></i>${b.series && b.series.name ? 'ج' + b.series.part : ''} ${esc(b.title)}</span>`).join('') : ''}</div>
           <div class="iw-acts"><button class="ib" data-a="close" title="إغلاق (Esc)">${ic('x')}</button></div>
         </div>
         <div class="iw-stage"><div class="iw-world">
@@ -222,29 +263,45 @@ const IdeaWeb = {
     // الخيوط
     $('.iw-silk', ov).innerHTML = G.rings.map(([a, b, lv]) => `<path class="silk" data-lv="${lv}" d="${this.curve(a, b, .1).d}"/>`).join('');
     let dew = '';
+    ov.classList.add('stars');
     $('.iw-edges', ov).innerHTML = G.edges.map(x => {
       const a = G.byId.get(x.a), b = G.byId.get(x.b); if (!a || !b) return '';
-      const c = this.curve(a, b, a.lv === 0 || b.lv === 0 ? .04 : .14);
+      const c = this.curve(a, b, .02);
       [.3, .62].forEach(t => { const px = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * c.cx + t * t * b.x, py = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * c.cy + t * t * b.y; dew += `<circle class="dew" cx="${px}" cy="${py}" r="2.2" style="animation-delay:${(Math.random() * 4).toFixed(2)}s"/>`; });
       return `<path class="thread" data-a="${x.a}" data-b="${x.b}" data-lv="${Math.max(a.lv, b.lv)}" d="${c.d}"><title>${esc(x.note || 'مرتبطين')}</title></path>`;
     }).join('');
     $('.iw-dew', ov).innerHTML = dew;
+    // اقتراحات: خيط منقّط من الصفحة اللي بالنص، وبطاقة صغيرة «اربط» مع الكلمات المشتركة
+    const sugg = (S.sug || []).filter(x => G.byId.has(x.id));
+    $('.iw-edges', ov).insertAdjacentHTML('beforeend', sugg.map(x => { const b = G.byId.get(x.id); return center && b ? `<path class="thread sugg" data-lv="1" d="${this.curve(center, b, .06).d}"><title>مقترح: ${esc(x.words.join('، '))}</title></path>` : ''; }).join(''));
     // البطاقات (موجودة بتتحرك لمكانها الجديد بنعومة)
     const box = $('.iw-nodes', ov), seen = new Set();
     G.list.forEach(n => {
       seen.add(n.id);
       let d = box.querySelector(`[data-id="${n.id}"]`);
       if (!d) {
-        d = el(`<div class="iw-node" data-id="${n.id}"><i class="iw-pin" title="اسحبني لصفحة ثانية لتربطهم 🧵"></i><b>ص ${n.k + 1}${S.books.length > 1 ? ` · ج${S.books[n.bi].series ? S.books[n.bi].series.part : ''}` : ''}</b><span>${esc(n.title)}</span></div>`);
+        const where = `ص ${n.k + 1}${S.books.length > 1 ? ` · ${S.books[n.bi].series && S.books[n.bi].series.name ? 'ج' + S.books[n.bi].series.part : esc(S.books[n.bi].title.slice(0, 18))}` : ''}`;
+        d = el(`<div class="iw-node" data-id="${n.id}"><i class="iw-pin" aria-label="${esc(n.title)}"></i><span dir="auto">${esc(n.title)}</span>
+          <div class="iw-tip" role="tooltip"><b>${where}</b><strong dir="auto">${esc(n.title)}</strong>${n.snippet ? `<p dir="auto">${esc(n.snippet)}</p>` : ''}<small>اضغط لتفتحها · اسحب لنجمة ثانية لتربطهم</small></div></div>`);
         d.style.left = (center ? center.x : 0) + 'px'; d.style.top = (center ? center.y : 0) + 'px';
         box.append(d);
       }
       d.style.setProperty('--tint', n.tint);
+      // النجمة بتكبر وبتلمع أكثر كل ما انربطت بصفحات أكثر
+      const deg = G.edges.filter(x => x.a === n.id || x.b === n.id).length;
+      d.style.setProperty('--st', (n.lv === 0 ? 30 : Math.min(26, 13 + deg * 4)) + 'px');
       d.classList.toggle('center', n.lv === 0);
       d.classList.toggle('lonely', n.lv === -1);
       requestAnimationFrame(() => { d.style.left = n.x + 'px'; d.style.top = n.y + 'px'; });
     });
     $$('.iw-node', box).forEach(d => { if (!seen.has(d.dataset.id)) d.remove(); });
+    $$('.iw-sugg', box).forEach(x => x.remove());
+    $$('.iw-node.suggested', box).forEach(d => d.classList.remove('suggested'));
+    sugg.forEach(x => {
+      const d = box.querySelector(`[data-id="${x.id}"]`); if (!d) return;
+      d.classList.add('suggested');
+      d.append(el(`<button class="iw-sugg" data-sugg="${x.id}" title="الصفحتين بيحكوا عن: ${esc(x.words.join('، '))}">🧵 اربط <small dir="auto">${esc(x.words.slice(0, 2).join('، '))}</small></button>`));
+    });
     // الخيوط بتنغزل: بتنرسم من البداية للنهاية
     if (spin) {
       const paths = $$('.iw-silk path, .iw-edges path', ov);
@@ -260,9 +317,10 @@ const IdeaWeb = {
       }));
     }
     const hint = $('.iw-hint', ov);
-    hint.innerHTML = G.edges.length
-      ? `<span>اضغط صفحة لتفوت عليها</span><span>دبل كليك = خليها بالنص</span><span>🧵 اسحب الخرزة الذهبية من صفحة لصفحة لتربطهم</span>`
-      : `<span>🧵 الشبكة فاضية لسا — اسحب الخرزة الذهبية من الصفحة اللي بالنص لأي صفحة حواليها، وشوف الخيط كيف بينغزل</span>`;
+    if (sugg.length && !G.edges.length) hint.innerHTML = `<span>✨ في ${sugg.length} ${sugg.length === 1 ? 'صفحة' : 'صفحات'} بتحكي عن نفس الشي — اضغط «🧵 اربط» عليها</span><span>أو اسحب من النجمة اللي بالنص لأي نجمة</span>`;
+    else hint.innerHTML = G.edges.length
+      ? `<span>مرّر الماوس على نجمة لتشوف شو فيها</span><span>اضغط = افتحها · دبل كليك = خليها بالنص</span><span>✨ اسحب من نجمة لنجمة لتربطهم</span>`
+      : `<span>✨ لسا ما في روابط — اسحب من النجمة اللي بالنص لأي نجمة حواليها، وبيطلع بينهم خط ضوء</span>`;
     if (first) this.camera(ov, center);
   },
   camera(ov, center) {
@@ -273,7 +331,7 @@ const IdeaWeb = {
     this.fit = () => {
       const L = this.S.G.list;
       const xs = L.map(n => n.x), ys = L.map(n => n.y);
-      const x0 = Math.min(...xs) - 130, x1 = Math.max(...xs) + 130, y0 = Math.min(...ys) - 80, y1 = Math.max(...ys) + 80;
+      const x0 = Math.min(...xs) - 130, x1 = Math.max(...xs) + 130, y0 = Math.min(...ys) - 90, y1 = Math.max(...ys) + 120; // تحت: مكان لاسم النجمة وللتلميح
       v.k = clamp(Math.min(W() / (x1 - x0), H() / (y1 - y0)), .3, 1.25);
       v.x = W() / 2 - (x0 + x1) / 2 * v.k; v.y = H() / 2 - (y0 + y1) / 2 * v.k;
     };
@@ -292,14 +350,34 @@ const IdeaWeb = {
     };
     document.addEventListener('keydown', key, true);
     $('[data-a=close]', ov).onclick = close;
+    // قبول اقتراح ربط
+    box.addEventListener('pointerdown', e => { if (e.target.closest('.iw-sugg')) e.stopPropagation(); }, true);
+    box.addEventListener('click', async e => {
+      const s = e.target.closest('.iw-sugg'); if (!s) return;
+      e.stopImmediatePropagation(); // «اربط» بس — مش «افتح الصفحة» كمان
+      const a = this.S.all.get(this.S.centerId), b = this.S.all.get(s.dataset.sugg);
+      if (await this.add(a.id, a.bookId, b.id, b.bookId, 'مقترح: ' + ((this.S.sug || []).find(x => x.id === b.id) || { words: [] }).words.join('، '))) { this.refreshBadges(); this.build(false); this.flash('🧵 انربطوا'); }
+    });
+    // البحث: بيبهّت اللي ما بيطابق، وEnter بيحط أول نتيجة بالنص
+    const find = $('.iw-find input', ov);
+    const match = q => { q = normMap(q.trim()).n; return q ? [...this.S.all.values()].filter(n => normMap(n.title + ' ' + (n.text || '')).n.includes(q)) : null; };
+    find.addEventListener('input', () => {
+      const m = match(find.value), ids = m && new Set(m.map(n => n.id));
+      $$('.iw-node', box).forEach(d => { d.classList.toggle('dim', !!ids && !ids.has(d.dataset.id)); d.classList.toggle('hit', !!ids && ids.has(d.dataset.id)); });
+    });
+    find.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const m = match(find.value); if (!m || !m.length) { this.flash('ما لقيت صفحة فيها هالكلمة'); return; }
+      this.recenter(m[0].id); find.value = ''; find.dispatchEvent(new Event('input'));
+    });
     stage.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       const pin = e.target.closest('.iw-pin');
       if (pin) { // نبدأ نغزل خيط من هالصفحة
         e.preventDefault();
         const from = pin.closest('.iw-node').dataset.id, n = this.S.G.byId.get(from);
-        thread = { from, x: n.x, y: n.y };
-        ov.classList.add('threading'); pin.closest('.iw-node').classList.add('from');
+        thread = { from, x: n.x, y: n.y, cx: e.clientX, cy: e.clientY, moved: false };
         try { stage.setPointerCapture(e.pointerId); } catch { }
         return;
       }
@@ -309,6 +387,10 @@ const IdeaWeb = {
     });
     stage.addEventListener('pointermove', e => {
       if (thread) {
+        if (!thread.moved) {
+          if (Math.hypot(e.clientX - thread.cx, e.clientY - thread.cy) < 6) return;
+          thread.moved = true; ov.classList.add('threading'); $(`.iw-node[data-id="${thread.from}"]`, ov)?.classList.add('from');
+        }
         const p = this.toWorld(ov, e.clientX, e.clientY);
         const mx = (thread.x + p.x) / 2, my = (thread.y + p.y) / 2 + 30;
         temp.setAttribute('d', `M${thread.x},${thread.y} Q${mx},${my} ${p.x},${p.y}`);
@@ -323,6 +405,8 @@ const IdeaWeb = {
     stage.addEventListener('pointerup', async e => {
       if (thread) {
         const t = thread; thread = null;
+        // ما تحرّك: ضغطة على النجمة = افتح الصفحة (والدبل كليك بيلغيها ويحطها بالنص)
+        if (!t.moved) { clearTimeout(clickT); clickT = setTimeout(() => this.enter(ov, t.from, close), 260); return; }
         temp.setAttribute('d', '');
         ov.classList.remove('threading');
         $$('.iw-node.from, .iw-node.drop', ov).forEach(x => x.classList.remove('from', 'drop'));
@@ -361,7 +445,7 @@ const IdeaWeb = {
     box.addEventListener('mouseout', e => { if (!e.relatedTarget || !e.relatedTarget.closest('.iw-node')) hot(null); });
     // ضغطة = افتح الصفحة بزوم، دبل كليك = خليها بالنص
     box.addEventListener('click', e => {
-      const n = e.target.closest('.iw-node'); if (!n || e.target.closest('.iw-pin')) return;
+      const n = e.target.closest('.iw-node'); if (!n || e.target.closest('.iw-pin, .iw-sugg')) return;
       clearTimeout(clickT);
       clickT = setTimeout(() => this.enter(ov, n.dataset.id, close), 260);
     });
@@ -401,11 +485,11 @@ const IdeaWeb = {
   async pickerFor(id) {
     const n = this.S.all.get(id), b = this.S.books.find(x => x.id === n.bookId);
     const pages = await this.pagesOf(b);
-    if (b.id !== Reader.book.id) { Toast.show({ icon: 'web', text: 'اسحب الخرزة الذهبية لتربط صفحات الكتاب الثاني' }); return; }
+    if (b.id !== Reader.book.id) { Toast.show({ icon: 'web', text: 'اسحب من نجمة لنجمة لتربط صفحات الكتاب الثاني' }); return; }
     this.picker(pages[n.k], n.k, async () => {
       if (!$('#iw')) return;
       const books = this.S.books;
-      for (const [bi, bk] of books.entries()) (await this.pagesOf(bk)).forEach((p, k) => { if (p && !this.S.all.has(p.id)) { const inf = this.pageInfo(p, k); this.S.all.set(p.id, { id: p.id, bookId: bk.id, bi, k, title: inf.title, empty: inf.empty, tint: this.S.tints[bi % this.S.tints.length] }); } });
+      for (const [bi, bk] of books.entries()) (await this.pagesOf(bk)).forEach((p, k) => { if (p && !this.S.all.has(p.id)) { const inf = this.pageInfo(p, k), text = htmlText(p.html || ''); this.S.all.set(p.id, { id: p.id, bookId: bk.id, bi, k, title: inf.title, snippet: inf.snippet, empty: inf.empty, tint: this.S.tints[bi % this.S.tints.length], text, tf: this.terms(text) }); } });
       this.build();
     });
   },

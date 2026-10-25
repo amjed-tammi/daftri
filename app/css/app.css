@@ -1134,7 +1134,6 @@ body.fmt-docked #navbar, body.fmt-docked .reviewbar { bottom: 68px; }
 .imp-mode button .ic { width: 16px; height: 16px; }
 .imp-mode button.on { background: rgba(232, 199, 122, .18); color: #f7e5b0; }
 /* وإنت عم تقرأ PDF: الرسائل بتنزل لتحت حتى ما تغطي أزرار العارض */
-body:has(.pdf-modal) #toasts { top: auto; bottom: 18px; }
 /* جدول عريض (من إكسل): خط أصغر والكلمات ما بتتكسّر حرف حرف */
 .content table.tbl-wide { font-size: 10.5px; line-height: 1.35; }
 .content table.tbl-wide th, .content table.tbl-wide td { padding: 2px 3px; word-break: normal; overflow-wrap: anywhere; min-width: 34px; }
@@ -1239,11 +1238,8 @@ body.narrow #rope { top: 52px; }
   #print .sheet-print .sh-cols { columns: 2; }
 }
 /* لما شريط الأدوات فوق ظاهر: الرسائل بتنزل تحته بدل ما تغطي أزراره */
-#toasts { transition: top .2s ease; }
 /* (الشريط والقوائم بتنزل من فوق، فالرسائل بتروح لتحت فوق شريط التنسيق) */
-body:has(#topbar.show) #toasts, body:has(.pop) #toasts { top: auto; bottom: 84px; }
 /* وإنت بنافذة (ورقة، إعدادات، امتحان…): الرسائل تحت حتى ما تغطي عنوانها وأزرارها */
-body:has(.modal-back) #toasts { top: auto; bottom: 18px; }
 
 /* ===== أوقات الصلاة ===== */
 .pr-chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid rgba(143, 211, 255, .35); background: rgba(143, 211, 255, .08); color: var(--tx); font: 13.5px var(--ui); cursor: pointer; white-space: nowrap; }
@@ -1259,3 +1255,130 @@ body:has(.modal-back) #toasts { top: auto; bottom: 18px; }
 .pr-set { display: flex; flex-direction: column; gap: 8px; }
 .pr-set .row { gap: 8px; flex-wrap: wrap; align-items: flex-end; }
 .pr-set .fld { flex: 1; min-width: 160px; }
+
+/* ===== شبكة الأفكار: بحث واقتراحات ربط ===== */
+.iw-find { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border-radius: 17px; border: 1px solid var(--glass-b); background: rgba(255, 255, 255, .05); color: var(--mut); min-width: 0; flex: 0 1 220px; }
+.iw-find .ic { width: 16px; height: 16px; flex: none; }
+.iw-find input { flex: 1; min-width: 0; border: 0; background: none; outline: 0; color: var(--tx); font: 13.5px var(--ui); }
+.iw-svg .thread.sugg { stroke: #8fd3ff; stroke-dasharray: 5 6 !important; stroke-dashoffset: 0 !important; opacity: .65; animation: iwSugg 1.6s linear infinite; }
+@keyframes iwSugg { to { stroke-dashoffset: -22; } }
+.iw-node.suggested { box-shadow: 0 0 0 2px rgba(143, 211, 255, .55), 0 10px 26px rgba(0, 0, 0, .4); opacity: 1 !important; }
+.iw-sugg { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid rgba(143, 211, 255, .6); background: #0f2348; color: #cfeaff; font: 12px var(--ui); white-space: nowrap; cursor: pointer; z-index: 3; }
+.iw-sugg small { color: var(--mut); max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.iw-sugg:hover { background: #17336a; }
+.iw-node.dim { opacity: .18 !important; }
+.iw-node.hit { box-shadow: 0 0 0 2px var(--gold), 0 10px 26px rgba(0, 0, 0, .4); }
+@media (prefers-reduced-motion: reduce) { .iw-svg .thread.sugg { animation: none; } }
+.upd ul { margin: 12px 0; padding-inline-start: 20px; line-height: 1.9; }
+
+/* الدفتر مسكّر (الغلاف): ما في شي ينكتب، فشريط التنسيق بيختفي */
+
+
+
+/* ===== شبكة الأفكار كسماء: كل صفحة نجمة، والروابط خطوط ضوء ===== */
+.iw.stars { background: radial-gradient(ellipse 70% 60% at 50% 50%, #12285a 0%, #081430 55%, #030713 100%); }
+.iw.stars::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .55;
+  background-image: radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 72% 12%, #dfe8ff, transparent), radial-gradient(1.5px 1.5px at 33% 76%, #fff, transparent), radial-gradient(1px 1px at 88% 64%, #fff, transparent), radial-gradient(1px 1px at 52% 40%, #cfdcff, transparent), radial-gradient(1px 1px at 22% 52%, #fff, transparent), radial-gradient(1.5px 1.5px at 64% 86%, #ffeccc, transparent), radial-gradient(1px 1px at 92% 30%, #fff, transparent);
+  background-size: 420px 420px; }
+.iw.stars .iw-silk, .iw.stars .iw-dew { display: none; }
+.iw.stars .iw-edges path.thread:not(.sugg) { stroke: rgba(255, 236, 190, .7); stroke-width: 1.3; filter: drop-shadow(0 0 4px rgba(255, 214, 140, .75)); }
+.iw.stars.focusing .iw-edges path.hot { stroke: #fff3cf; stroke-width: 2; filter: drop-shadow(0 0 7px rgba(255, 220, 150, .95)); }
+.iw.stars .iw-node { width: auto; min-width: 0; padding: 0; background: none; box-shadow: none; display: flex; flex-direction: column; align-items: center; gap: 7px; transform: translate(-50%, calc(var(--st, 14px) / -2)); cursor: pointer; }
+.iw.stars .iw-node::before { display: none; }
+.iw.stars .iw-node:hover, .iw.stars .iw-node.center, .iw.stars .iw-node.center:hover, .iw.stars .iw-node.lonely, .iw.stars .iw-node.drop { transform: translate(-50%, calc(var(--st, 14px) / -2)); box-shadow: none; }
+.iw.stars .iw-pin { position: relative; top: auto; left: auto; margin: 0; width: var(--st, 14px); height: var(--st, 14px); border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle, #ffffff 0 18%, var(--tint) 38%, rgba(0, 0, 0, 0) 70%);
+  box-shadow: 0 0 calc(var(--st, 14px) * .9) calc(var(--st, 14px) * .2) color-mix(in srgb, var(--tint) 55%, transparent);
+  animation: iwTwinkle 3.6s ease-in-out infinite; transition: transform .2s; }
+.iw.stars .iw-pin::before, .iw.stars .iw-pin::after { content: ''; position: absolute; left: 50%; top: 50%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .85), transparent); transform: translate(-50%, -50%); pointer-events: none; }
+.iw.stars .iw-pin::before { width: calc(var(--st, 14px) * 2.4); height: 1px; }
+.iw.stars .iw-pin::after { width: 1px; height: calc(var(--st, 14px) * 2.4); background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .85), transparent); }
+.iw.stars .iw-node:hover .iw-pin { transform: scale(1.35); }
+.iw.stars .iw-node.lonely { opacity: .45; }
+.iw.stars .iw-node.lonely:hover { opacity: 1; }
+.iw.stars .iw-node.center .iw-pin { animation-duration: 2.4s; }
+.iw.stars .iw-node.from .iw-pin, .iw.stars .iw-node.drop .iw-pin { transform: scale(1.5); box-shadow: 0 0 22px 8px rgba(159, 224, 181, .7); }
+.iw.stars .iw-node > span { max-width: 130px; font: 600 12px/1.3 var(--ui); color: #dfe6ff; text-shadow: 0 1px 4px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; text-align: center; }
+.iw.stars .iw-node.center > span { color: #fff3cf; font-size: 13.5px; max-width: 180px; }
+.iw.stars .iw-node.suggested { box-shadow: none; }
+.iw.stars .iw-node.suggested .iw-pin { box-shadow: 0 0 16px 5px rgba(143, 211, 255, .7); }
+.iw.stars .iw-node.hit .iw-pin { box-shadow: 0 0 20px 7px rgba(255, 220, 140, .9); transform: scale(1.4); }
+.iw.stars .iw-sugg { position: static; transform: none; margin-top: 2px; }
+/* البطاقة اللي بتطلع لما تمرّر الماوس على النجمة */
+.iw-tip { position: absolute; bottom: calc(100% + 10px); left: 50%; width: 230px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(180deg, #fbf6e8, #efe5c9); color: #26305a; box-shadow: 0 12px 30px rgba(0, 0, 0, .55); opacity: 0; transform: translate(-50%, 6px); pointer-events: none; transition: opacity .18s, transform .18s; z-index: 5; text-align: start; }
+.iw-tip b { display: block; font: 700 11px var(--ui); color: #8a6a2a; margin-bottom: 2px; }
+.iw-tip strong { display: block; font: 700 14px/1.35 var(--ui); unicode-bidi: plaintext; }
+.iw-tip p { margin: 4px 0 0; font: 12.5px/1.55 var(--ui); color: #4a5070; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; unicode-bidi: plaintext; }
+.iw-tip small { display: block; margin-top: 6px; font-size: 11px; color: #8a8fa5; }
+.iw:not(.stars) .iw-tip { display: none; }
+.iw.stars .iw-node:hover .iw-tip { opacity: 1; transform: translate(-50%, 0); }
+.iw.threading .iw-tip { display: none; }
+@keyframes iwTwinkle { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
+@media (prefers-reduced-motion: reduce) { .iw.stars .iw-pin { animation: none; } }
+
+/* ورق أدفى بالليل (اختياري من الإعدادات) */
+body.night-warm #book .page, body.night-warm #book .coverpg { filter: sepia(.22) saturate(.92) brightness(.93); transition: filter 1.5s; }
+
+/* ===== ملاحظة سريعة وكاميرا ===== */
+.qn { display: flex; flex-direction: column; gap: 12px; }
+.qn textarea { min-height: 120px; font-size: 15px; line-height: 1.7; }
+.qn-k { margin-inline-end: auto; }
+.modal.cam-modal { width: min(820px, 100%); }
+.cam { display: flex; flex-direction: column; gap: 12px; }
+.cam-view { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
+.cam-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.cam-flash.on { opacity: .85; transition: none; }
+
+/* مكان الرسائل: جوّا الكتاب أو فوق نافذة بتنزل تحت (بينحسب لما الرسالة تطلع، مش مع كل ضغطة زر) */
+#toasts.low { top: auto; bottom: 84px; }
+#toasts.low.modal { bottom: 18px; }
+/* الدفتر مسكّر: شريط التنسيق مخفي */
+body.book-closed #selbar.docked { display: none; }
+
+/* ===== المعادلات ===== */
+.eq { display: inline-flex; align-items: center; gap: .08em; padding: 0 .2em; margin: 0 .05em; border-radius: 5px; font-family: 'Cambria Math', 'Times New Roman', serif; font-size: 1.08em; line-height: 1; vertical-align: middle; direction: ltr; unicode-bidi: isolate; cursor: pointer; white-space: nowrap; }
+.content .eq:hover { background: rgba(90, 120, 190, .12); }
+.eq i.eq-v { font-style: italic; }
+.eq .eq-fn, .eq .eq-el { font-style: normal; }
+.eq .eq-op { padding: 0 .18em; }
+.eq .eq-sym { font-style: normal; }
+.eq sup, .eq sub { font-size: .68em; line-height: 0; }
+.eq sup { vertical-align: .75em; }
+.eq sub { vertical-align: -.35em; }
+.eq .eq-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 .12em; font-size: .9em; }
+.eq .eq-num { padding: 0 .15em .08em; border-bottom: 1.2px solid currentColor; }
+.eq .eq-den { padding: .08em .15em 0; }
+.eq .eq-sqrt { display: inline-flex; align-items: flex-end; }
+.eq .eq-rad { font-size: 1.15em; line-height: 1; }
+.eq .eq-under { border-top: 1.2px solid currentColor; padding: .05em .15em 0; margin-top: .1em; }
+.eq .eq-deg { font-size: .55em; margin-inline-end: -.35em; vertical-align: .9em; }
+.eq .eq-p { font-style: normal; }
+.eqf { display: flex; flex-direction: column; gap: 10px; }
+.eqf-in { font: 16px Consolas, 'Courier New', monospace; }
+.eqf-keys { display: flex; flex-wrap: wrap; gap: 5px; direction: ltr; }
+.eqf-keys button { min-width: 36px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--glass-b); background: rgba(255, 255, 255, .05); color: var(--tx); font: 15px 'Cambria Math', serif; cursor: pointer; }
+.eqf-keys button:hover { background: rgba(232, 199, 122, .14); }
+.eqf-prev { min-height: 64px; display: grid; place-items: center; padding: 12px; border-radius: 10px; background: #fbf7ec; color: #1d2340; font-size: 22px; }
+.eqf code { direction: ltr; unicode-bidi: isolate; font-size: 12px; background: rgba(255, 255, 255, .08); padding: 1px 5px; border-radius: 5px; }
+
+/* ===== ساعات الدراسة لكل مادة ===== */
+.wk { padding: 12px 14px; margin: 4px 0 12px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid var(--glass-b); display: flex; flex-direction: column; gap: 7px; }
+.wk-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wk-top b { color: #f7e5b0; }
+.wk-row { display: grid; grid-template-columns: minmax(70px, 130px) 1fr auto; align-items: center; gap: 10px; font-size: 13px; }
+.wk-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.wk-bar i { display: block; height: 100%; border-radius: 4px; }
+.wk-m { color: var(--mut); font-size: 12px; white-space: nowrap; }
+
+/* ===== الطباعة: كله أو صفحات ===== */
+.prt { display: flex; flex-direction: column; gap: 8px; }
+.prt-o { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--glass-b); background: rgba(255, 255, 255, .03); cursor: pointer; }
+.prt-o:has(input[type=radio]:checked) { border-color: rgba(232, 199, 122, .55); background: rgba(232, 199, 122, .1); }
+.prt-o span { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prt-o small { color: var(--mut); }
+.prt-n { width: 72px; height: 32px; padding: 0 8px; text-align: center; }
+.eq .eq-frac sup { vertical-align: .5em; }
+.eq .eq-frac sub { vertical-align: -.2em; }
+.eq .eq-den { padding-top: .18em; }

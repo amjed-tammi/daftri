@@ -29,6 +29,7 @@
       <button class="btn ghost" id="btnCal" title="تقويم الدراسة" data-ic="calendar"><span>التقويم</span><b class="badge" id="calBadge" hidden></b></button>
       <button class="btn ghost" id="btnSubj" title="مادة جديدة: بتجمع كتبها وملفات الـPDF تبعها" data-ic="folder"><span>مادة جديدة</span></button>
       <button class="btn primary" id="btnNew" data-ic="plus">كتاب جديد</button>
+      <button class="ib" id="btnQuick" title="ملاحظة سريعة (Alt+N) — بتنحفظ بدفتر «مسودات»" data-ic="edit"></button>
       <button class="ib" id="btnSettings" title="الإعدادات" data-ic="gear"></button>
       <button class="ib" id="btnLibMore" title="المزيد" data-ic="more"></button>
     </div>
@@ -58,8 +59,6 @@
       <span class="tb-sep"></span>
       <!-- دراسة -->
       <div class="tb-cluster" role="group" aria-label="الدراسة">
-        <button class="tbtn" id="tbReview" title="المراجعة: أسئلة بترجعلك لحد ما تحفظها" data-ic="cards"><span>مراجعة</span><b class="badge" id="rvBadge" hidden></b></button>
-        <button class="tbtn" id="tbExam" title="امتحانات هالكتاب" data-ic="exam"><span>امتحانات</span></button>
         <button class="tbtn" id="tbIndex" title="الفهرس" data-ic="list"><span>الفهرس</span></button>
         <button class="tbtn" id="tbWeb" title="شبكة الأفكار (Ctrl+G)" data-ic="web"><span>الشبكة</span></button>
       </div>
@@ -79,7 +78,6 @@
     <button class="pginfo" id="pgInfo" title="اذهب إلى صفحة"></button>
     <button class="ib" id="navNext" title="الصفحة التالية"></button>
   </div>
-  <div id="reviewbar" class="bar bottom show reviewbar" hidden></div>
 </section>
 
 <div id="sessionGlow" aria-hidden="true"></div>
@@ -102,7 +100,6 @@
 <script src="js/fonts.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/music.js"></script>
-<script src="js/exams.js"></script>
 <script src="js/share.js"></script>
 <script src="js/study.js"></script>
 <script src="js/subjects.js"></script>
@@ -115,6 +112,8 @@
 <script src="js/onboard.js"></script>
 <script src="js/sheet.js"></script>
 <script src="js/prayer.js"></script>
+<script src="js/quick.js"></script>
+<script src="js/math.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

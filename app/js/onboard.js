@@ -1,9 +1,9 @@
 'use strict';
 /* ============ أول تشغيل: «شو بتعمل؟» — توجيهي، جامعة، كاتب، أو بس دفتر ============
    سؤال واحد ببداية التطبيق بيجهّز كل شي: المواد، دفتر لكل مادة بالورق المناسب، وموعد الامتحان بالتقويم.
-   الكاتب بيطلعله شريط أخف (بدون أدوات المراجعة والامتحانات) — وكل شي بيتغيّر بعدين من الإعدادات. */
+   الكاتب بيطلعله شريط أخف (بدون شبكة الأفكار) — وكل شي بيتغيّر بعدين من الإعدادات. */
 const PROFILES = {
-  tawjihi: { icon: '🎓', title: 'طالب توجيهي', text: 'موادّك جاهزة، أسئلة مراجعة وامتحانات، وعدّ تنازلي للامتحان بالتقويم.' },
+  tawjihi: { icon: '🎓', title: 'طالب توجيهي', text: 'موادّك جاهزة بدفاترها، تقويم للدراسة، وعدّ تنازلي لموعد الامتحان.' },
   uni: { icon: '🏛', title: 'طالب جامعة', text: 'مواد الفصل، محاضرات PDF جنب ملاحظاتك، وكود وجداول.' },
   writer: { icon: '✍️', title: 'كاتب', text: 'كتب وفصول، ورق مريح ووضع تركيز — بدون أدوات الدراسة.' },
   notes: { icon: '📝', title: 'بس بدي دفتر', text: 'دفتر فاضي وابدأ اكتب فوراً.' },
@@ -59,7 +59,7 @@ const Onboard = {
     else if (p === 'writer') box.innerHTML = `<h3>✍️ أول كتاب إلك</h3>
       <label class="fld"><span>اسم الكتاب</span><input class="inp" type="text" dir="auto" name="title" value="كتابي الأول" maxlength="80"></label>
       <div class="seg ob-paper"><button type="button" class="on" data-pp="lined">مسطّر</button><button type="button" data-pp="blank">سادة</button></div>
-      <p class="muted sm">رح نخفّي أدوات الدراسة (مراجعة، امتحانات) من الشريط حتى يضل نظيف. بترجّعها من الإعدادات وقت ما بدك.</p>
+      <p class="muted sm">رح نخفّي شبكة الأفكار من الشريط حتى يضل نظيف. بترجّعها من الإعدادات وقت ما بدك.</p>
       <div class="row end">${back}<button class="btn primary" data-a="go">${ic('check')} يلا نكتب</button></div>`;
     else { this.finish(p, {}); return; }
     const pickSt = st => { $$('[data-st]', box).forEach(b => b.classList.toggle('on', b.dataset.st === st)); $('.ob-chips', box).innerHTML = chips(TAWJIHI[st]); };
@@ -125,7 +125,7 @@ const Onboard = {
       setTimeout(() => Tour.maybe('lib'), 1200);
     }
   },
-  // أدوات الدراسة (مراجعة، امتحانات، شبكة): مخفية للكاتب إلا إذا رجّعها من الإعدادات
+  // أدوات الدراسة (شبكة الأفكار): مخفية للكاتب إلا إذا رجّعها من الإعدادات
   study() { const a = Settings.d.app; return a.studyTools != null ? a.studyTools : a.profile !== 'writer'; },
   applyProfile() { document.body.classList.toggle('no-study', !this.study()); },
 };

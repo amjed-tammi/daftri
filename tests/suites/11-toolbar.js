@@ -9,7 +9,7 @@ const SUITE = {
       await T.waitFor(() => document.querySelector('.palette'), 2000, 'نافذة كل الأدوات');
       const labels = [...document.querySelectorAll('.pl-item span')].map(s => s.textContent);
       expect(labels).toContain('كتاب جديد');
-      expect(labels.includes('تصدير PDF'), 'PDF مش لازم يطلع بالمكتبة').toBeFalsy();
+      expect(labels.includes('طباعة / PDF (كله أو صفحات)'), 'PDF مش لازم يطلع بالمكتبة').toBeFalsy();
       await T.shot('palette-library');
       await T.key('Escape', 'Escape');
     });
@@ -19,7 +19,8 @@ const SUITE = {
       const n = [...document.querySelectorAll('#topbar button')].filter(x => x.offsetParent).length;
       T.info({ visibleButtons: n });
       expect(n).toBeLessThan(11);
-      expect(!!document.querySelector('.tb-cluster #tbReview') && !!document.querySelector('.tb-cluster #tbWeb')).toBeTruthy();
+      expect(!!document.querySelector('.tb-cluster #tbIndex') && !!document.querySelector('.tb-cluster #tbWeb')).toBeTruthy();
+      expect(!document.querySelector('#tbReview') && !document.querySelector('#tbExam'), 'المراجعة والامتحانات انشالوا').toBeTruthy();
       await T.shot('topbar-grouped');
     });
     await T.test('الشريط ما بيطلع برا الشاشة ولا بيتداخل (1024 و 1366)', async () => {
@@ -38,15 +39,15 @@ const SUITE = {
       await T.mouse.click('#tbMore');
       await T.waitFor(() => document.querySelector('.menu'));
       const labels = [...document.querySelectorAll('.menu .m-item span')].map(s => s.textContent);
-      for (const l of ['كل الأدوات…', 'تصدير PDF', 'الغلاف ومعلومات الكتاب', 'تسجيل صوت للصفحة', 'ملء الشاشة', 'الجولة التعريفية']) expect(labels, 'ناقص: ' + l).toContain(l);
+      for (const l of ['كل الأدوات…', 'طباعة / PDF (كله أو صفحات)', 'الغلاف ومعلومات الكتاب', 'تسجيل صوت للصفحة', 'ملء الشاشة', 'الجولة التعريفية']) expect(labels, 'ناقص: ' + l).toContain(l);
       await T.shot('more-menu');
     });
     await T.test('البحث بالأدوات بيفهم عربي و English وبيتجاهل الهمزات', async () => {
       Palette.open(); await T.sleep(250);
       const inp = document.querySelector('.palette input');
       const find = async q => { inp.value = q; inp.dispatchEvent(new Event('input')); await T.sleep(60); return [...document.querySelectorAll('.pl-item span')].map(s => s.textContent); };
-      expect(await find('pdf')).toContain('تصدير PDF');
-      expect(await find('امتحانات')).toContain('امتحانات هالكتاب');
+      expect(await find('pdf')).toContain('طباعة / PDF (كله أو صفحات)');
+      expect(await find('ورقة')).toContain('ورقة ليلة الامتحان: ملخص الكتاب بصفحة وحدة');
       expect(await find('اعدادات')).toContain('الإعدادات العامة');
       expect(await find('focus')).toContain('وضع التركيز');
       expect((await find('zzzz')).length).toBe(0);
@@ -68,9 +69,7 @@ const SUITE = {
       for (const c of Cmd.here()) {
         if (['back', 'full', 'pdf', 'tour', 'share', 'mic', 'restore', 'open', 'backup'].includes(c.id)) continue; // بتفتح نافذة نظام أو بتطلع من الكتاب
         try { T.clean(); await T.sleep(80); await c.act(); await T.sleep(350); } catch (e) { bad.push(c.id + ': ' + e.message); }
-        if (Study.rv) { Study.endReview && Study.endReview(); }
         if (Study.focus) Study.setFocus(false);
-        if (typeof Exams !== 'undefined' && Exams.run) Exams.close();
         document.querySelectorAll('#iw, #exam').forEach(x => { if (x.id === 'iw' && typeof IdeaWeb.close === 'function') IdeaWeb.close(); });
       }
       expect(bad.join(' | ')).toBe('');

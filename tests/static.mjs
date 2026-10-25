@@ -101,7 +101,9 @@ export function runStatic(ROOT) {
     const used = new Set([...all.matchAll(/DB\.(?:get|all|put|del|getMany|putMany|delMany)\(\s*'(\w+)'/g)].map(x => x[1]));
     const missing = [...used].filter(s => !stores.has(s));
     if (missing.length) fail('مخازن مش معرّفة: ' + missing.join(', '));
-    const unused = [...stores].filter(s => !used.has(s));
+    // مخازن ميزات انشالت (LEGACY_STORES بـ core.js): بتضل حتى ما تنمسح بيانات حدا
+    const legacy = new Set([...((code['core.js'].match(/const LEGACY_STORES = \[([^\]]*)\]/) || [])[1] || '').matchAll(/'(\w+)'/g)].map(x => x[1]));
+    const unused = [...stores].filter(s => !used.has(s) && !legacy.has(s));
     if (unused.length) fail('مخازن معرّفة بدون استعمال: ' + unused.join(', '));
     const ver = +code['core.js'].match(/indexedDB\.open\('daftari',\s*(\d+)\)/)[1];
     return { stores: [...stores], version: ver };
@@ -145,10 +147,19 @@ export function runStatic(ROOT) {
     if (/@import\s+url\(\s*['"]?https?:/i.test(css) || /url\(\s*['"]?https?:/i.test(css)) ext.push('CSS خارجي');
     for (const [f, s] of Object.entries(code)) if (/fetch\(\s*['"`]https?:/.test(s) || /new\s+WebSocket\(/.test(s)) ext.push('اتصال خارجي بـ ' + f);
     // أي عنوان إنترنت بالكود لازم يكون من القائمة: أوقات الصلاة (اختياري، بيتخزّن للشهر) وتضمين يوتيوب لروابط المستخدم
-    const ALLOWED = ['api.aladhan.com', 'www.youtube.com'];
+    const ALLOWED = ['api.aladhan.com', 'www.youtube.com', 'raw.githubusercontent.com', 'github.com'];
     for (const [f, s] of Object.entries(code)) for (const m of s.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)) if (!ALLOWED.includes(m[1].toLowerCase())) ext.push(`${m[1]} ← ${f}`);
     if (ext.length) fail(ext.join(', '));
     return 'خدمات مسموحة بس: ' + ALLOWED.join('، ');
+  });
+
+  T('نسخة التطبيق من مصدر واحد: APP_VERSION = version.json', () => {
+    const v = JSON.parse(fs.readFileSync(path.join(APP, 'version.json'), 'utf8'));
+    const m = all.match(/const APP_VERSION = '([^']+)'/);
+    if (!m) fail('APP_VERSION مش موجود');
+    if (m[1] !== v.version) fail(`APP_VERSION ${m[1]} ≠ version.json ${v.version}`);
+    if (!Array.isArray(v.notes) || !v.notes.length) fail('version.json بدون «شو الجديد»');
+    return v.version;
   });
 
   T('أمان: ما في eval ولا new Function، وكل ملف strict', () => {

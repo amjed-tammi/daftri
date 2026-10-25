@@ -81,10 +81,10 @@ const SUITE = {
       const api = {
         DB: ['open', 'get', 'put', 'all', 'getMany', 'putMany', 'delMany'],
         Settings: ['newPaper', 'panel'], Reader: ['open', 'close', 'turn'], Editor: ['flushAll', 'unbindAll'],
-        Exams: ['all', 'take', 'close', 'panel'], Share: ['pack', 'importData', 'exportBook'],
+        Sheet: ['open', 'collect', 'print'], Share: ['pack', 'importData', 'exportBook'],
         Music: ['panel', 'onBookOpen', 'onBookClose'], Tour: ['maybe', 'start', 'end'], Library: ['load', 'titleTaken'],
       };
-      const mods = { DB, Settings, Reader, Editor, Exams, Share, Music, Tour, Library };
+      const mods = { DB, Settings, Reader, Editor, Sheet, Share, Music, Tour, Library };
       const bad = [];
       for (const [mod, fns] of Object.entries(api)) {
         const m = mods[mod]; if (!m) { bad.push(mod); continue; }

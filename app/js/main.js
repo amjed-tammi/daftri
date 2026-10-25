@@ -21,12 +21,13 @@
 
   // المكتبة
   $('#btnNew').onclick = () => Library.openForm();
+  $('#btnQuick').onclick = () => QuickNote.open();
   $('#btnSubj').onclick = () => Subjects.form();
   $('#btnCal').onclick = () => Cal.open();
   // قائمة «⋯» بالمكتبة: مرتبة بمجموعات، وكل شي من مصدر واحد (Cmd)
   $('#btnLibMore').onclick = async e => {
     const t = e.currentTarget, n = await Trash.count();
-    const items = Cmd.menu(['search', 'cal', 'journal', '-', 'subject', 'pdfUp', '-', 'open', 'backup', 'restore', 'trash', '-', ...(Pwa.installed() ? [] : ['install']), 'tour']);
+    const items = Cmd.menu(['search', 'journal', '-', 'pdfUp', 'open', 'backup', 'restore', 'trash', '-', ...(Pwa.installed() ? [] : ['install']), 'tour', '-', 'report', 'suggest']);
     const tr = items.find(x => x.label === 'سلة المحذوفات'); if (tr && n) tr.label += ` (${n})`;
     Menu.open(t, [{ icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() }, '-', ...items]);
   };
@@ -41,8 +42,6 @@
   $('#tbBack').onclick = () => Reader.close();
   $('#tbIndex').onclick = e => Finder.index(e.currentTarget);
   $('#tbWeb').onclick = () => IdeaWeb.open();
-  $('#tbExam').onclick = () => Exams.panel();
-  $('#tbReview').onclick = e => Study.reviewMenu(e.currentTarget);
   $('#tbSearch').onclick = () => Finder.open();
   $('#tbFocus').onclick = () => Study.setFocus(!Study.focus);
   $('#tbPaper').onclick = e => { Reader.paperPanel(e.currentTarget); fromTop(); };
@@ -51,7 +50,7 @@
     Menu.open(e.currentTarget, [
       { icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() },
       '-',
-      ...Cmd.menu(['sheet', 'pdf', 'share', 'edit', 'mic', 'addpage', '-', 'pdfs', 'planBook', 'cal', 'journal', '-', 'full', 'tour']),
+      ...Cmd.menu(['sheet', 'pdf', 'share', 'edit', 'mic', 'addpage', '-', 'pdfs', 'planBook', 'cal', 'journal', '-', 'full', 'tour', 'report']),
     ]);
     fromTop();
   };
@@ -66,15 +65,16 @@
       { head: `إدراج في الصفحة ${l.i + 1}` },
       { icon: 'table', label: 'جدول', act: at(() => Ctx.tablePicker(fake, l)) },
       { icon: 'code', label: 'صندوق كود', act: at(() => Editor.insertCode(l)) },
+      { icon: 'math', label: 'معادلة (½ x² √)', hint: 'Alt+=', act: at(() => MathEq.open(l)) },
       { icon: 'check', label: 'قائمة مهام', act: at(() => Editor.insertChecklist(l)) },
       { icon: 'note', label: 'ملاحظة لاصقة', act: () => Stickies.addNote(l) },
+      { icon: 'image', label: 'صوّر السبورة أو ورقة (كاميرا)', act: () => Camera.shoot(l) },
       { icon: 'image', label: 'صور من جهازك (ستيكر)', act: async () => { const fs = await pickFile('image/*', true); if (fs.length) Stickies.addPhotos(l, fs); } },
       { icon: 'film', label: 'فيديو قصير', act: at(() => Media2.insertVideo(l)) },
       { icon: 'video', label: 'رابط فيديو/موقع', act: at(() => Links.open(Sel.save(), l)) },
       { icon: 'page', label: 'رابط لصفحة أو كتاب', act: at(() => Links.open(Sel.save(), l, 'page')) },
       { icon: 'mic', label: 'تسجيل صوت للصفحة', act: () => Voice.attachToPage(l) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
-      { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
       { icon: 'upload', label: 'ملف Word / Excel / PDF / CSV…', act: () => Importer.pick(l) },
       '-',
       { icon: 'addpage', label: 'إضافة صفحة بعد هذه', act: () => Reader.insertPageAfter(l.i) },
@@ -110,11 +110,13 @@
     // لا ننفّذ أوامر الكتاب خلف نافذة أو قائمة مفتوحة.
     if (e.defaultPrevented || $('.modal-back') || Pop.cur || Tour.active) return;
     if (mod && e.code === 'Slash') { e.preventDefault(); Palette.open(); return; }
+    if (e.altKey && !mod && e.code === 'Equal' && !$('#reader').hidden && Reader.book) { e.preventDefault(); if (!$('.modal-back')) MathEq.open(curLive()); return; }
+    if (e.altKey && !mod && e.code === 'KeyN') { e.preventDefault(); if (!$('.modal-back')) QuickNote.open(); return; }
     if (mod && e.code === 'KeyS') { e.preventDefault(); Editor.flushAll(); Toast.show({ icon: 'check', text: 'محفوظ ✓ (الحفظ تلقائي دائماً)', timeout: 1500 }); return; }
     if (mod && !e.shiftKey && e.code === 'KeyF') { e.preventDefault(); if (!$('.modal-back')) Finder.open(); return; }
     if (mod && e.code === 'KeyP') {
       e.preventDefault();
-      if (!$('#reader').hidden && Reader.book) Exporter.pdf();
+      if (!$('#reader').hidden && Reader.book) { if (!$('.modal-back')) Exporter.choose(); }
       else Toast.show({ icon: 'pdf', text: 'افتح الكتاب اللي بدك تصدّره، بعدين اضغط PDF أو Ctrl+P', timeout: 3500 });
       return;
     }
@@ -157,6 +159,7 @@
   setTimeout(() => { const go = () => Lazy.need('importer').catch(() => {}); if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 4000 }); else go(); }, 6000);
   AutoBackup.init();
   Prayer.init();
+  AppInfo.init();
   Onboard.applyProfile();
   // أول مرة: سؤال «شو بتعمل؟» بيجهّز المواد والدفاتر. وبعدها جولة الترحيب، أو «شوف الجديد» بعد كل إضافة
   if (Onboard.should()) Onboard.open(); else Tour.maybe('lib');

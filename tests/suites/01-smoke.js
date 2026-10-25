@@ -2,7 +2,7 @@ const SUITE = {
   title: 'Smoke — التطبيق بيقوم سليم من أول تشغيل',
   phases: [async T => {
     await T.test('كل وحدات التطبيق محمّلة', () => {
-      const mods = { DB: typeof DB, Media: typeof Media, Library: typeof Library, Reader: typeof Reader, Editor: typeof Editor, Stickies: typeof Stickies, Wrap: typeof Wrap, Study: typeof Study, Finder: typeof Finder, Trash: typeof Trash, IdeaWeb: typeof IdeaWeb, Exams: typeof Exams, Share: typeof Share, Music: typeof Music, Settings: typeof Settings, Reminders: typeof Reminders, Rope: typeof Rope, Tour: typeof Tour, FontKit: typeof FontKit, Exporter: typeof Exporter, Backup: typeof Backup, PaperUI: typeof PaperUI };
+      const mods = { DB: typeof DB, Media: typeof Media, Library: typeof Library, Reader: typeof Reader, Editor: typeof Editor, Stickies: typeof Stickies, Wrap: typeof Wrap, Study: typeof Study, Finder: typeof Finder, Trash: typeof Trash, IdeaWeb: typeof IdeaWeb, Share: typeof Share, Music: typeof Music, Settings: typeof Settings, Reminders: typeof Reminders, Rope: typeof Rope, Tour: typeof Tour, FontKit: typeof FontKit, Exporter: typeof Exporter, Backup: typeof Backup, PaperUI: typeof PaperUI };
       const missing = Object.entries(mods).filter(([, t]) => t === 'undefined').map(([n]) => n);
       T.expect(missing.join(','), 'وحدات ناقصة:').toBe('');
     });

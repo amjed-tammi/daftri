@@ -103,10 +103,18 @@ const Settings = {
       app: { lite: weak, profile: null, ...(x.app || {}) },
     };
     this.applyLite();
+    this.applyNight();
   },
   // إعدادات التطبيق العامة (الوضع الخفيف، نوع المستخدم…)
   set(k, v) { this.d.app[k] = v; this.save(); if (k === 'lite') this.applyLite(); },
   applyLite() { document.body.classList.toggle('lite', !!(this.d.app && this.d.app.lite)); },
+  // ورق أدفى بالليل: من 9 بالليل لـ 5 الصبح (بنشيّك كل 10 دقائق)
+  applyNight(now = new Date()) {
+    const h = now.getHours(), on = !!(this.d.app && this.d.app.nightWarm) && (h >= 21 || h < 5);
+    document.body.classList.toggle('night-warm', on);
+    if (!this._nightIv) this._nightIv = setInterval(() => this.applyNight(), 10 * 60e3);
+    return on;
+  },
   save() { localStorage.setItem('appDefaults', JSON.stringify(this.d)); },
   newPaper() { return JSON.parse(JSON.stringify(this.d.paper)); },
   // موسيقى الكتاب: «الافتراضي» بيرجع لإعدادات التطبيق
@@ -157,7 +165,7 @@ const Settings = {
           <b>${ic('download')} النسخ الاحتياطي التلقائي</b>
           <p class="muted sm">${AutoBackup.status()}</p>
           <p class="lbl">كتبك محفوظة جوّا المتصفح. ${AutoBackup.can ? 'اختار مجلد (مثلاً جوّا OneDrive أو Google Drive) وكل يوم بتنحفظ نسخة لحالها، وبنخلّي آخر 7 أيام.' : 'متصفحك ما بيسمح بمجلد تلقائي، فبنذكّرك كل أسبوع تنزّل نسخة.'}</p>
-          <div class="row">${AutoBackup.can ? `<button class="btn primary sm" data-a="bkpick">${ic('folder')} ${D.backup.on ? 'غيّر المجلد' : 'اختار مجلد'}</button>${D.backup.on ? `<button class="btn ghost sm" data-a="bknow">${ic('check')} احفظ نسخة هلّق</button><button class="btn ghost sm" data-a="bkoff">أطفيه</button>` : ''}` : `<button class="btn primary sm" data-a="backup">${ic('download')} نزّل نسخة</button>`}</div>
+          <div class="row">${AutoBackup.can ? `<button class="btn primary sm" data-a="bkpick">${ic('folder')} ${D.backup.on ? 'غيّر المجلد' : 'اختار مجلد'}</button>${D.backup.on ? `<button class="btn ghost sm" data-a="bknow">${ic('check')} احفظ نسخة هلّق</button><button class="btn ghost sm" data-a="bkload" title="أحدث نسخة بالمجلد — مثلاً من جهازك الثاني">${ic('upload')} افتح آخر نسخة</button><button class="btn ghost sm" data-a="bkoff">أطفيه</button>` : ''}` : `<button class="btn primary sm" data-a="backup">${ic('download')} نزّل نسخة</button>`}</div>
         </div>
         <div class="st-block pr-block">
           <b>🕌 أوقات الصلاة</b>
@@ -172,8 +180,14 @@ const Settings = {
             <p class="muted sm pr-status">${Prayer.times() ? 'اليوم: ' + Prayer.times().filter(x => x.en !== 'Sunrise').map(x => `${x.ar} ${Prayer.fmt(x.at)}`).join(' · ') : 'بنجيب الأوقات من Aladhan (مجاني) مرة بالشهر، وبتضل شغّالة بدون إنترنت.'}</p>
           </div>
         </div>
-        <label class="chk"><input type="checkbox" data-k="study" ${Onboard.study() ? 'checked' : ''}> <span>أدوات الدراسة بالشريط (مراجعة، امتحانات، شبكة الأفكار)</span></label>
+        <label class="chk"><input type="checkbox" data-k="study" ${Onboard.study() ? 'checked' : ''}> <span>شبكة الأفكار بالشريط</span></label>
+        <label class="chk"><input type="checkbox" data-k="night" ${D.app.nightWarm ? 'checked' : ''}> <span>ورق أدفى بالليل (من 9 بالليل لـ 5 الصبح) — أريح للعيون</span></label>
         <label class="chk"><input type="checkbox" data-k="lite" ${D.app.lite ? 'checked' : ''}> <span>وضع خفيف: بدون تأثيرات ولا حركة (للأجهزة القديمة وتوفير البطارية)</span></label>
+        <div class="st-block">
+          <b>${ic('star')} دفتري ${APP_VERSION} — مفتوح المصدر</b>
+          <p class="muted sm">${Pwa.web ? 'النسخة اللي من الموقع بتتحدّث لحالها.' : 'منشيّك على التحديثات مرة باليوم ومنخبّرك.'} شفت مشكلة أو عندك فكرة؟ بتنفتح صفحة جاهزة على GitHub وإنت بتكتب شو صار بس.</p>
+          <div class="row"><button class="btn ghost sm" data-a="upd">${ic('download')} شيّك على تحديث</button><button class="btn ghost sm" data-a="bug">${ic('help')} أبلغ عن مشكلة</button><button class="btn ghost sm" data-a="idea">${ic('star')} اقترح ميزة</button></div>
+        </div>
         <div class="row"><button class="btn ghost sm" data-a="reminders">${ic('bell')} التذكيرات</button><button class="btn ghost sm" data-a="tour">${ic('help')} الجولة التعريفية</button></div>
         <div class="row"><button class="btn ghost sm" data-a="backup">${ic('download')} نسخة احتياطية لكل المكتبة</button><button class="btn ghost sm" data-a="restore">${ic('upload')} استعادة</button><button class="btn ghost sm" data-a="trash">${ic('trash')} سلة المحذوفات</button></div>
       </div>
@@ -198,6 +212,10 @@ const Settings = {
         case 'bkpick': if (await AutoBackup.pick()) { m.close(); this.panel('app'); } break;
         case 'bknow': { const r = await AutoBackup.run(true, true); Toast.show({ icon: r === 'ok' ? 'check' : 'download', text: r === 'ok' ? 'انحفظت نسخة ✓' : 'ما قدرنا نحفظ — اختار المجلد مرة ثانية', timeout: 2500 }); m.close(); this.panel('app'); break; }
         case 'bkoff': AutoBackup.off(); m.close(); this.panel('app'); break;
+        case 'bkload': m.close(); await AutoBackup.restoreLatest(); break;
+        case 'upd': AppInfo.check(true); break;
+        case 'bug': AppInfo.report('bug'); break;
+        case 'idea': AppInfo.report('idea'); break;
         case 'prgeo': {
           const st = $('.pr-status', n); st.textContent = 'عم نحدد موقعك…';
           try { const g = await Prayer.locate(); Object.assign(D.prayer, { lat: g.lat, lng: g.lng, label: 'موقعي' }); this.save(); await this.prayerSync(n); } catch (er) { st.textContent = er.message; }
@@ -221,6 +239,7 @@ const Settings = {
       else if (k === 'flip') localStorage.setItem('flipSound', e.target.checked ? '1' : '0');
       else if (k === 'dock') Editor.setDock(e.target.checked);
       else if (k === 'lite') this.set('lite', e.target.checked);
+      else if (k === 'night') { this.set('nightWarm', e.target.checked); this.applyNight(); }
       else if (k && k.startsWith('pr')) {
         const P = D.prayer, v = e.target.value;
         if (k === 'pron') { P.on = e.target.checked; $('.pr-set', n).hidden = !P.on; }

@@ -61,18 +61,20 @@ const SUITE = {
       expect(med, 'وسيط زمن التقليب').toBeLessThan(Math.round(1200 * load2));
     });
 
-    await T.test('الكتابة: كلفة الحرف على التطبيق أقل من إطار واحد (16ms)', async () => {
+    await T.test('الكتابة: شغل التطبيق لكل حرف (سكربت + تنسيق + ترتيب) أقل من 8ms', async () => {
+      // منقيس شغل المتصفح الفعلي (مش وقت الساعة) حتى ما يأثر ضغط الجهاز ولا رحلة الأمر من الاختبار للمتصفح
       const text = 'Typing test بالعربي والإنجليزي ';
-      const typeAll = async () => { const t0 = performance.now(); for (const ch of text) await T.typeText(ch); await frame(); return performance.now() - t0; };
-      // خط الأساس: نفس الكتابة بخانة عادية (وقت رحلة الأمر بين الاختبار والمتصفح)
-      const ta = document.createElement('textarea'); ta.style.cssText = 'position:fixed;left:10px;top:10px;z-index:99999'; document.body.append(ta);
-      await T.mouse.click(ta); const base = await typeAll(); ta.remove();
       await Reader.open(b.id, 0); await T.sleep(400); T.quiet();
       const l = Editor.live.get(0); await T.mouse.click(l.c.querySelector('p'));
-      const page = await typeAll();
-      const perChar = Math.round(Math.max(0, page - base) / text.length * 10) / 10;
-      T.info({ pageMs: Math.round(page), baselineMs: Math.round(base), appCostPerCharMs: perChar });
-      expect(perChar).toBeLessThan(budget(16));
+      const m = async () => Object.fromEntries(((await T.metrics()) || []).map(x => [x.name, x.value]));
+      const a = await m();
+      for (const ch of text) await T.typeText(ch);
+      await frame();
+      const z = await m();
+      const work = ((z.ScriptDuration - a.ScriptDuration) + (z.RecalcStyleDuration - a.RecalcStyleDuration) + (z.LayoutDuration - a.LayoutDuration)) * 1000;
+      const perChar = Math.round(work / text.length * 10) / 10;
+      T.info({ perCharMs: perChar, scriptMs: Math.round((z.ScriptDuration - a.ScriptDuration) * 1000), styleMs: Math.round((z.RecalcStyleDuration - a.RecalcStyleDuration) * 1000), layoutMs: Math.round((z.LayoutDuration - a.LayoutDuration) * 1000), styleRecalcs: z.RecalcStyleCount - a.RecalcStyleCount, chars: text.length });
+      expect(perChar).toBeLessThan(budget(8));
     });
 
     await T.test('إعادة توزيع النص على الصفحات (reflow) بأقل من 50ms', async () => {

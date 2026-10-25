@@ -547,7 +547,7 @@ const Editor = {
 
   click(e, l) {
     const t = e.target;
-    if (Study.onClick(e)) return;
+    const eq = t.closest('.eq'); if (eq) { e.preventDefault(); MathEq.open(l, eq); return; } // المعادلة: ضغطة بتعدّلها
     const cb = t.closest('.cb');
     if (cb) { cb.parentElement.classList.toggle('done'); this.changed(l); return; }
     const mx = t.closest('figure.media .mx');
@@ -583,8 +583,8 @@ const Editor = {
       <button data-al="auto" title="محاذاة تلقائية حسب لغة السطر">${ic('swap')}</button>
       <span class="sep"></span>
       <button data-a="link" title="ربط برابط أو فيديو (Ctrl+K)">${ic('link')}</button>
+      <button data-a="eq" title="معادلة: كسور، أسس، جذور، كيمياء (Alt+=)">${ic('math')}</button>
       <button data-a="voice" title="ربط تسجيل صوتي بالكلمة">${ic('mic')}</button>
-      <button data-a="card" title="جواب لسؤال مراجعة (يتخبّى بوضع الامتحان)">${ic('tape')}</button>
       <button data-a="font" title="خط وحجم النص المحدد">${ic('font')}</button>
       <button data-a="clear" title="مسح التنسيق">${ic('eraser')}</button>
       <span class="sep"></span>
@@ -619,8 +619,8 @@ const Editor = {
         }
         case 'icode': this.inlineCode(); break;
         case 'link': if (l) Links.open(Sel.save(), l); return;
+        case 'eq': if (l) MathEq.open(l); return;
         case 'voice': if (l) Voice.attachToSelection(Sel.save(), l); return;
-        case 'card': if (l) Study.mark(Sel.save(), l); return;
         case 'font': if (l) FontKit.selectionPanel(x, l); return;
         case 'clear': document.execCommand('removeFormat'); document.execCommand('hiliteColor', false, 'transparent'); break;
       }
@@ -841,13 +841,13 @@ const Stickies = {
     const d = this.add(l, s);
     setTimeout(() => $('.stx', d).focus(), 30);
   },
-  async addPhotos(l, files, pt) {
+  async addPhotos(l, files, pt, size = 220) {
     files = files.slice(0, 8);
     let k = 0;
     for (const f of files) {
       const b = await Media.downscale(f, 900);
       const id = await Media.save(b);
-      const w = 220;
+      const w = size;
       const bx = pt ? pt.x - w / 2 : 70, by = pt ? pt.y - 60 : 110;
       this.add(l, { id: uid(), kind: 'photo', blob: id, w, x: Math.round(clamp(bx + k * 28, -60, PW - w + 40)), y: Math.round(clamp(by + k * 34, 0, PH - 200)), rot: +(Math.random() * 8 - 4).toFixed(1), text: '' });
       k++;
@@ -972,6 +972,7 @@ const Ctx = {
       '-', { head: 'إدراج' },
       { icon: 'table', label: 'جدول', act: doAt(() => this.tablePicker(e, l)) },
       { icon: 'code', label: 'صندوق كود', act: doAt(() => Editor.insertCode(l)) },
+      { icon: 'math', label: 'معادلة (½ x² √)', hint: 'Alt+=', act: doAt(() => MathEq.open(l)) },
       { icon: 'check', label: 'قائمة مهام', act: doAt(() => Editor.insertChecklist(l)) },
       { icon: 'note', label: 'ملاحظة لاصقة', act: () => Stickies.addNote(l, pt) },
       { icon: 'image', label: 'صور من جهازك (ستيكر)', act: async () => { const fs = await pickFile('image/*', true); if (fs.length) Stickies.addPhotos(l, fs, pt); } },
@@ -980,10 +981,7 @@ const Ctx = {
       { icon: 'page', label: 'رابط لصفحة أو كتاب', act: doAt(() => Links.open(Sel.save(), l, 'page')) },
       { icon: 'mic', label: hasSel ? 'تسجيل صوت للكلمة المحددة' : 'تسجيل صوت للصفحة', act: doAt(() => hasSel ? Voice.attachToSelection(Sel.save(), l) : Voice.attachToPage(l, e)) },
       { icon: 'music', label: 'ملف صوتي من جهازك', act: () => AudioFile.attach(l) },
-      { icon: 'exam', label: 'اعمل امتحان من هالصفحة', act: () => Exams.editor(null, { pageIndex: l.i }) },
       { icon: 'upload', label: 'ملف Word / Excel / PDF…', act: () => Importer.pick(l) },
-      ...(hasSel ? [{ icon: 'tape', label: 'اجعله جواباً لسؤال مراجعة', act: doAt(() => Study.mark(Sel.save(), l)) }] : []),
-      ...(e.target.closest('.ans') ? [{ icon: 'x', label: 'إلغاء سؤال المراجعة', act: () => Study.unmark(e.target.closest('.ans'), l) }] : []),
       '-', { head: `الصفحة ${l.i + 1}` },
       { icon: 'web', label: 'اربطها بصفحة ثانية…', act: () => IdeaWeb.picker(l.p, l.i) },
       { icon: 'web', label: 'شبكة الأفكار', hint: 'Ctrl+G', act: () => IdeaWeb.open(l.p.id) },

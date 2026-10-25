@@ -48,41 +48,19 @@ const SUITE = {
         expect(overlapText(), 'بعد السحب').toBe(0);
         await T.shot('wrap-after-drag');
       });
-      await T.test('سؤال مراجعة: تحديد الجواب + زر الشريط اللاصق (ضغطة حقيقية)', async () => {
+      await T.test('هايلايت: تحديد كلمة + لون من شريط التنسيق (ضغطة حقيقية)، وبيطلع بورقة ليلة الامتحان', async () => {
         const l = Editor.live.get(0);
         const p = [...l.c.querySelectorAll('p')].find(x => x.textContent.includes('السطر 2'));
         const t = p.firstChild, i = t.data.indexOf('Networks');
         const r = document.createRange(); r.setStart(t, i); r.setEnd(t, i + 'Networks'.length);
         l.c.focus(); Sel.restore(r); await T.sleep(150);
-        await T.mouse.click('#selbar [data-a=card]');
-        await T.waitFor(async () => (await DB.all('cards')).length === 1, 3000, 'حفظ البطاقة');
-        expect(!!l.c.querySelector('.ans[data-card]')).toBeTruthy();
-      });
-      await T.test('امتحان من الصفحة: اقتراح، حفظ، جواب غلط بيدلّ على الصفحة، رجوع، نتيجة', async () => {
-        const l = Editor.live.get(0);
-        const p = [...l.c.querySelectorAll('p')].find(x => x.textContent.includes('السطر 4'));
-        const t = p.firstChild, rg = document.createRange(); rg.setStart(t, t.data.indexOf('layers')); rg.setEnd(t, t.data.indexOf('layers') + 6);
-        await Study.mark(rg, l); await T.sleep(200);
-        Exams.editor(null, { pageIndex: 0 }); await T.sleep(300);
-        expect(document.querySelectorAll('.ex-q').length).toBe(2);
-        await T.mouse.click('.ex-ed [data-a=save]');
-        await T.waitFor(async () => (await Exams.all(Reader.book.id)).length === 1);
-        Exams.take((await Exams.all(Reader.book.id))[0]); await T.sleep(400);
-        const q = Exams.run.qs[0];
-        await T.mouse.click(`.ex-opt[data-j="${q.correct === 0 ? 1 : 0}"]`);
-        expect(document.querySelector('.ex-src').textContent).toContain('صفحة 1');
-        await T.mouse.click('.ex-src [data-a=page]');
-        await T.waitFor(() => document.querySelector('#exResume'));
-        await T.mouse.click('#exResume');
-        await T.mouse.click('[data-a=next]');
-        const q2 = Exams.run.qs[1];
-        await T.mouse.click(`.ex-opt[data-j="${q2.correct}"]`);
-        await T.mouse.click('[data-a=next]');
-        await T.waitFor(() => document.querySelector('.ex-ring'));
-        expect(document.querySelector('.ex-ring b').textContent).toBe('50%');
-        await T.shot('exam-result');
-        Exams.close();
-        expect((await Exams.all(Reader.book.id))[0].attempts.length).toBe(1);
+        await T.mouse.click('#selbar .hl[data-hl]');
+        await T.sleep(200); Editor.flushAll();
+        const hl = [...l.c.querySelectorAll('span[style*="background"]')].find(x => x.textContent.includes('Networks'));
+        expect(!!hl, 'النص المظلّل').toBeTruthy();
+        await Sheet.open(); await T.sleep(300);
+        expect(document.querySelector('.sheet-paper').textContent).toContain('Networks');
+        T.clean();
       });
       await T.test('شبكة الأفكار: ربط صفحتين بسحب الخرزة الذهبية بالماوس', async () => {
         const l1 = Editor.live.get(1);
@@ -120,14 +98,13 @@ const SUITE = {
     // بعد إعادة تحميل التطبيق: كل شي محفوظ
     async T => {
       const { expect } = T;
-      await T.test('بعد إعادة التشغيل: الكتاب والكلام والملاحظة والبطاقات والامتحان كلهم محفوظين', async () => {
+      await T.test('بعد إعادة التشغيل: الكتاب والكلام والملاحظة والهايلايت كلهم محفوظين', async () => {
         const b = (await DB.all('books')).find(x => x.title === 'كتاب الدمج Integration');
         expect(!!b).toBeTruthy();
         const pages = await DB.getMany('pages', b.pageIds);
         expect(pages[0].html).toContain('السطر 1');
         expect(pages[0].stickies.length).toBe(1);
-        expect((await DB.all('cards')).length).toBe(2);
-        expect((await DB.all('exams')).length).toBe(1);
+        expect(pages[0].html).toContain('background');
         expect(b.lastSpread).toBe(0);
       });
       await T.test('البحث بكل الكتب بيلاقي الكلام وبيفتح الصفحة', async () => {

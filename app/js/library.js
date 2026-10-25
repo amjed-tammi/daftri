@@ -123,7 +123,6 @@ const Library = {
     if (solo.length) shelf(this.cur ? 'كتب المادة' : this.subjects.length ? 'كتب بدون مادة' : 'كتبي', solo.length + ' كتاب', solo.sort((a, b) => b.updated - a.updated), false);
     Files.shelf(box, sid);
     Media.hydrate(box);
-    Study.decorateLibrary();
   },
   card(b) {
     const n = (b.pageIds || []).length;
@@ -283,7 +282,7 @@ const Library = {
         await DB.put('books', nb);
         m.close();
         await this.load();
-        Reader.open(nb.id).then(() => { if (!Tour.willRun('book') && Reader.book && Reader.book.id === nb.id && Reader.s < 0) setTimeout(() => { if (Reader.s < 0 && !Tour.active) Reader.turn(1).then(() => Editor.focusPage(0)); }, 650); });
+        Reader.open(nb.id); // دفتر جديد: الغلاف بيتقلّب لحاله (Reader.open)
       }
     };
     $('.bf-paper', f).append(PaperUI.make(d.paper, { preview: true }));
