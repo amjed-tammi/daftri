@@ -10,7 +10,7 @@ async function appFiles() {
   for (const m of html.matchAll(/(?:src|href)="((?:js|css)\/[^"?#]+)"/g)) files.add(m[1]);
   try {
     const core = await (await fetch('js/core.js', { cache: 'no-cache' })).text();
-    for (const m of core.matchAll(/'(js\/[a-z0-9-]+\.js)'/g)) files.add(m[1]);
+    for (const m of core.matchAll(/'((?:js|lib)\/[a-z0-9.-]+\.js)'/g)) files.add(m[1]);
   } catch { }
   return [...files];
 }

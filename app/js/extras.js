@@ -501,7 +501,7 @@ const Exporter = {
   choose() {
     const R = Reader; if (!R.book) return;
     Editor.flushAll();
-    const empty = p => !p.html && !(p.stickies || []).length && !(p.attach || []).length;
+    const empty = p => !p.html && !p.bg && !(p.stickies || []).length && !(p.attach || []).length;
     let last = R.pages.length - 1; while (last > 0 && empty(R.pages[last])) last--;
     const s0 = Math.max(0, 2 * R.s), s1 = Math.min(last, s0 + 1);
     const n = el(`<form class="prt" autocomplete="off">

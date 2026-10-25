@@ -28,6 +28,9 @@ export function runStatic(ROOT) {
     const lazy = [...(src['core.js'] || '').matchAll(/'js\/([a-z0-9-]+\.js)'/g)].map(m => m[1]);
     const twice = lazy.filter(f => used.has(f));
     if (twice.length) fail('بيتحمّل مرتين (بـ index.html ووقت الحاجة): ' + twice.join(', '));
+    const libs = [...(src['core.js'] || '').matchAll(/'(lib\/[a-z0-9.-]+\.js)'/g)].map(m => m[1]);
+    const libMissing = libs.filter(f => !fs.existsSync(path.join(APP, f)));
+    if (libMissing.length) fail('مكتبة وقت الحاجة مش موجودة: ' + libMissing.join(', '));
     const lazyMissing = lazy.filter(f => !files.includes(f));
     if (lazyMissing.length) fail('ملف وقت الحاجة مش موجود: ' + lazyMissing.join(', '));
     lazy.forEach(f => used.add(f));

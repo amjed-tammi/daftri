@@ -27,7 +27,7 @@
   // قائمة «⋯» بالمكتبة: مرتبة بمجموعات، وكل شي من مصدر واحد (Cmd)
   $('#btnLibMore').onclick = async e => {
     const t = e.currentTarget, n = await Trash.count();
-    const items = Cmd.menu(['search', 'journal', '-', 'pdfUp', 'open', 'backup', 'restore', 'trash', '-', ...(Pwa.installed() ? [] : ['install']), 'tour', '-', 'report', 'suggest']);
+    const items = Cmd.menu(['search', 'journal', '-', 'importBook', 'pdfUp', 'open', 'backup', 'restore', 'trash', '-', ...(Pwa.installed() ? [] : ['install']), 'tour', '-', 'report', 'suggest']);
     const tr = items.find(x => x.label === 'سلة المحذوفات'); if (tr && n) tr.label += ` (${n})`;
     Menu.open(t, [{ icon: 'more', label: 'كل الأدوات…', hint: 'Ctrl+/', act: () => Palette.open() }, '-', ...items]);
   };

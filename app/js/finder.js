@@ -23,7 +23,7 @@ const Finder = {
     for (const b of books) {
       (b.pageIds || []).forEach((pid, i) => {
         const p = pages.get(pid); if (!p) return;
-        const text = (htmlText(p.html) + '\n' + (p.stickies || []).map(s => htmlText(s.text)).join('\n') + '\n' + (p.attach || []).map(a => a.title || '').join(' ')).replace(/[ \t]+/g, ' ');
+        const text = (htmlText(p.html) + '\n' + (p.text ? p.text + '\n' : '') + (p.stickies || []).map(s => htmlText(s.text)).join('\n') + '\n' + (p.attach || []).map(a => a.title || '').join(' ')).replace(/[ \t]+/g, ' ');
         if (text.trim()) docs.push({ book: b, i, text, nm: normMap(text) });
       });
     }

@@ -303,5 +303,6 @@ function collectBlobs(p) {
   (p.html || '').replace(/data-blob="([^"]+)"/g, (_, id) => { out.push(id); return ''; });
   (p.stickies || []).forEach(s => s.blob && out.push(s.blob));
   (p.attach || []).forEach(a => a.blob && out.push(a.blob));
+  if (p.bg) out.push(p.bg); // صورة صفحة الـPDF
   return out;
 }

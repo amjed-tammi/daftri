@@ -39,7 +39,7 @@ const Cmd = {
       // المكتبة
       { id: 'new', g: 'المكتبة', icon: 'plus', label: 'كتاب جديد', en: 'new book create', ctx: 'lib', act: () => Library.openForm() },
       { id: 'subject', g: 'المكتبة', icon: 'folder', label: 'مادة جديدة', en: 'new subject course folder', ctx: 'lib', act: () => Subjects.form() },
-      { id: 'importBook', g: 'المكتبة', icon: 'upload', label: 'كتاب جديد من ملف Word / Excel', en: 'import new book from word excel docx xlsx csv', ctx: 'lib', act: () => Importer.pickBook() },
+      { id: 'importBook', g: 'المكتبة', icon: 'upload', label: 'كتاب جديد من ملف PDF / Word / Excel', en: 'import new book from pdf word excel docx xlsx csv scan page by page', ctx: 'lib', act: () => Importer.pickBook() },
       { id: 'pdfUp', g: 'المكتبة', icon: 'attach', label: 'رفع ملف PDF (محاضرة، سلايدات)', en: 'upload pdf lecture slides attach', ctx: 'lib', act: () => Files.upload({ subjectId: Library.cur || NO_SUBJECT }) },
       { id: 'open', g: 'المكتبة', icon: 'share', label: 'فتح كتاب مشارَك (.daftar)', en: 'open import shared', ctx: 'lib', act: () => Share.pick() },
       { id: 'trash', g: 'المكتبة', icon: 'trash', label: 'سلة المحذوفات', en: 'trash deleted restore', ctx: 'lib', act: () => Trash.panel() },

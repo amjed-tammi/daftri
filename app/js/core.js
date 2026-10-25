@@ -363,7 +363,7 @@ function stripAns(html) {
    ملفات كبيرة وما بتلزم كل يوم (مثل قارئ وورد/إكسل/PDF) ما بتنحمّل مع الإقلاع: أول مرة بتلزم بس.
    (عامل الخدمة بيقرأ هالقائمة كمان، فبتشتغل بدون إنترنت.) */
 const Lazy = {
-  files: { importer: 'js/importer.js' },
+  files: { importer: 'js/importer.js', pdfjs: 'lib/pdf.min.js', pdfworker: 'lib/pdf.worker.min.js' }, // pdf.js (موزيلا، Apache-2.0): لتحويل PDF صفحة بصفحة
   _p: {},
   need(k) {
     return this._p[k] || (this._p[k] = new Promise((res, rej) => {

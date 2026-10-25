@@ -245,14 +245,14 @@ const SUITE = {
       expect(h).toContain('<th>مرحبا</th><th>سلام</th>');
       expect(h).toContain('<td>1</td><td>2</td>');
     });
-    await T.test('PDF حقيقي (عربي + إنجليزي) → «الاثنين»: الأصل محفوظ والنص صفحات بترتيب صح', async () => {
+    await T.test('PDF حقيقي (عربي + إنجليزي) → «نصه بس»: النص صفحات بترتيب صح', async () => {
       const f = await T.fixture('sample-ar-en.pdf', 'application/pdf');
       const n0 = Reader.pages.length;
       dropOn(live().pg, f);
       await T.waitFor(() => document.querySelector('.import-dlg .imp-pdf'), 8000, 'نافذة PDF');
       expect(document.querySelector('.imp-opt[data-a=text]').disabled).toBeFalsy();
       await T.shot('import-dialog-pdf');
-      await T.mouse.click('.imp-opt[data-a=both]');
+      await T.mouse.click('.imp-opt[data-a=text]');
       await T.waitFor(() => Reader.pages.length > n0, 8000, 'صفحات PDF');
       await T.sleep(600);
       const h = allHtml();
@@ -261,7 +261,6 @@ const SUITE = {
       expect(h).toContain('نموذج OSI فيه سبع طبقات، وأشهر بروتوكول هو TCP/IP اللي بنستعمله كل يوم.');
       expect(h).toContain('The OSI model has seven layers. TCP is reliable, UDP is fast.');
       expect(h).toContain('<b>ملاحظة مهمة:</b> الطبقة 3 هي طبقة الشبكة.');
-      await T.waitFor(async () => (await DB.all('files')).some(x => x.bookId === Reader.book.id && x.name === 'sample-ar-en'), 4000, 'الأصل محفوظ مع الكتاب');
     });
     await T.test('PDF فيه صور بس (ما فيه نص): خيار التحويل مقفول مع شرح', async () => {
       const pdf = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>endobj\n4 0 obj<</Length 18>>stream\n0 0 m 100 100 l S\nendstream endobj\ntrailer<</Root 1 0 R>>\n%%EOF';

@@ -131,8 +131,8 @@ const Reader = {
   pageEl(i, live, side) {
     const p = this.pages[i];
     const st = p.style || this.book.paper.style;
-    const pg = el(`<div class="page side-${side} ps-${st}" data-i="${i}">
-      <div class="lines"></div><div class="mline"></div>
+    const pg = el(`<div class="page side-${side} ps-${st}${p.bg ? ' has-bg' : ''}" data-i="${i}">
+      ${p.bg ? `<img class="pg-bg" data-blob="${p.bg}" alt="" draggable="false" style="--ar:${p.bgAR || 1.414}">` : '<div class="lines"></div><div class="mline"></div>'}
       <div class="content" ${live ? 'contenteditable="true"' : ''} spellcheck="false"></div>
       <div class="stickies"></div><div class="attach"></div>
       <div class="pnum">${i + 1}</div><div class="gutter"></div>

@@ -488,6 +488,67 @@ const Sheets = {
 
 const W1252 = new TextDecoder('windows-1252');
 /* ===== PDF: بنطلّع النص منه (عربي وإنجليزي) بدون مكتبات ===== */
+/* ===== PDF صفحة بصفحة: كل صفحة بترتسم صورة على صفحة بالكتاب (نص، سكان، رسومات، جداول — شو ما كان)
+   بمكتبة pdf.js (موزيلا، مفتوحة المصدر) محفوظة جوّا التطبيق بـ lib/ — بتشتغل بدون إنترنت، وبتتحمّل بس وقت الحاجة. */
+const PdfPages = {
+  W: 1300, // عرض الصورة: أوضح من الصفحة على الشاشة، ومش كبيرة على التخزين
+  async lib() {
+    await Lazy.need('pdfjs');
+    const L = window.pdfjsLib;
+    if (!L.GlobalWorkerOptions.workerSrc) L.GlobalWorkerOptions.workerSrc = Lazy.files.pdfworker; // بملف محلي (file://) بيرجع لحاله للخيط الرئيسي
+    return L;
+  },
+  async open(f) {
+    const L = await this.lib();
+    return L.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false, useSystemFonts: true }).promise;
+  },
+  // كل صفحة → { blob: صورة الصفحة, text: نصها للبحث }. progress(i, n) بعد كل صفحة
+  async read(f, progress = () => {}) {
+    const doc = await this.open(f), n = doc.numPages, out = [];
+    const c = document.createElement('canvas'), g = c.getContext('2d', { alpha: false });
+    try {
+      for (let i = 1; i <= n; i++) {
+        const page = await doc.getPage(i);
+        const v1 = page.getViewport({ scale: 1 });
+        const vp = page.getViewport({ scale: Math.min(4, this.W / v1.width) });
+        c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+        g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: g, viewport: vp }).promise;
+        const blob = await new Promise(r => c.toBlob(r, 'image/webp', 0.82)) || await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+        let text = '';
+        try { const tc = await page.getTextContent(); text = tc.items.map(t => t.str + (t.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+/g, ' ').trim().slice(0, 20000); } catch { }
+        out.push({ blob, text, w: c.width, h: c.height });
+        page.cleanup();
+        progress(i, n);
+        await new Promise(r => setTimeout(r, 0)); // منخلي الواجهة تتنفس بين الصفحات
+      }
+    } finally { c.width = c.height = 0; doc.destroy(); }
+    return out;
+  },
+  // صفحات الكتاب: الصورة خلفية الصفحة، والنص للبحث، وفوقها بتقدر تكتب وتلزّق ملاحظات
+  async records(f, bookId, onStep) {
+    const pages = await this.read(f, onStep);
+    // النص للبحث: قارئنا (بيفهم العربي صح)، ولو ما زبط منرجع لنص pdf.js
+    let ours = [];
+    try { ours = await PdfText.read(f); } catch { }
+    const recs = [];
+    pages.forEach((p, i) => { const t = ours.length === pages.length && !ours.garbled ? htmlText((ours[i] || []).join('\n')).replace(/[ \t]+/g, ' ').trim() : ''; if (t) p.text = t.slice(0, 20000); });
+    for (const p of pages) recs.push({ id: 'p' + uid(), bookId, html: '', stickies: [], attach: [], bg: await Media.save(p.blob), bgAR: +(p.h / p.w).toFixed(4), text: p.text });
+    return recs;
+  },
+  // تقدّم القراءة بإشعار واحد بيتحدّث
+  progress(name) {
+    let t = null, last = 0;
+    const step = (i, n) => {
+      const now = Date.now(); if (i < n && now - last < 250) return; last = now;
+      if (t) t();
+      t = Toast.show({ icon: 'download', title: `عم نحوّل «${name}»…`, text: `صفحة ${i} من ${n}`, timeout: 0 });
+    };
+    step.done = () => t && t();
+    return step;
+  },
+};
+
 const PdfText = {
   async read(file) {
     const u8 = new Uint8Array(await file.arrayBuffer());
@@ -1025,8 +1086,22 @@ const Import = {
     if (!pages.length) return 0;
     const recs = [];
     for (const p of pages) recs.push({ id: 'p' + uid(), bookId: Reader.book.id, html: p.html, stickies: await this.stickers(p, parsed.images, rtl), attach: [] });
+    return this.insert(l, recs, { replace });
+  },
+  // PDF صفحة بصفحة: نفس العدد ونفس الشكل
+  async pdfPages(l, f, { replace = false } = {}) {
+    const step = PdfPages.progress(this.title(f));
+    let recs;
+    try { recs = await PdfPages.records(f, Reader.book.id, step); }
+    catch (e) { step.done(); Toast.show({ icon: 'x', title: 'ما قدرنا نقرأ الـPDF', text: e.message, timeout: 6000 }); console.warn(e); return 0; }
+    step.done();
+    if (!recs.length) return 0;
+    Editor.flushAll();
+    return this.insert(l, recs, { replace });
+  },
+  async insert(l, recs, { replace = false } = {}) {
     let at = l.i + 1;
-    const curEmpty = Editor.isEmpty(l.c) && !(l.p.stickies || []).length && !(l.p.attach || []).length;
+    const curEmpty = Editor.isEmpty(l.c) && !(l.p.stickies || []).length && !(l.p.attach || []).length && !l.p.bg;
     if (replace || curEmpty) {
       at = l.i;
       const old = Reader.pages[at];
@@ -1116,11 +1191,11 @@ const Import = {
     const name = this.title(f);
     const text = parsed && parsed.chars > 20;
     const n = el(`<div class="import-dlg">
-      <div class="imp-head"><span class="imp-ic imp-pdf">PDF</span><div><h3 dir="auto">${esc(name)}</h3><p class="muted sm">${parsed ? `${parsed.pdfPages} صفحات` : ''}${!text ? ' · ما فيه نص (صور أو سكان)' : ''}</p></div></div>
+      <div class="imp-head"><span class="imp-ic imp-pdf">PDF</span><div><h3 dir="auto">${esc(name)}</h3><p class="muted sm">${parsed ? `${parsed.pdfPages} ${parsed.pdfPages === 1 ? 'صفحة' : 'صفحات'}` : ''}${!text ? ' · صور أو سكان (بيتحوّل صفحة بصفحة عادي)' : ''}</p></div></div>
       <div class="imp-opts">
-        <button class="imp-opt rec" data-a="keep">${ic('attach')}<b>خلّيه زي ما هو</b><span>بنفس شكله وخطوطه وصوره — بيفتح بعارض PDF، ومربوط بهالكتاب</span></button>
-        <button class="imp-opt" data-a="text" ${text ? '' : 'disabled'}>${ic('page')}<b>حوّل نصه لصفحات بالكتاب</b><span>${!text ? (err && err.message) || 'هالملف صور بس، ما فيه نص نطلّعه' : parsed.garbled ? '⚠ الحروف العربية بهالملف مخزّنة ناقصة (بيصير بملفات جوجل دوكس) — النص بيطلع مش دقيق، الأفضل «خلّيه زي ما هو»' : 'النص والعناوين بيصيروا قابلين للتعديل والتلوين وأسئلة المراجعة'}</span></button>
-        <button class="imp-opt" data-a="both" ${text ? '' : 'disabled'}>${ic('copy')}<b>الاثنين</b><span>الأصل محفوظ، والنص بصفحات جديدة</span></button>
+        <button class="imp-opt rec" data-a="pages">${ic('books')}<b>صفحة بصفحة بالكتاب</b><span>${parsed && parsed.pdfPages > 1 ? `الـ${parsed.pdfPages} صفحات` : 'نفس الصفحات'} بنفس شكلها بالزبط — نص، سكان، صور، جداول، رسومات. وبتقدر تكتب وتلزّق ملاحظات فوقها، والبحث بيلاقي نصها</span></button>
+        <button class="imp-opt" data-a="text" ${text ? '' : 'disabled'}>${ic('page')}<b>نصه بس، قابل للتعديل</b><span>${!text ? (err && err.message) || 'هالملف صور بس، ما فيه نص نطلّعه' : parsed.garbled ? '⚠ الحروف العربية بهالملف مخزّنة ناقصة (بيصير بملفات جوجل دوكس) — النص بيطلع مش دقيق، الأفضل «صفحة بصفحة»' : 'النص والعناوين بيتوزعوا على صفحات الكتاب وبتعدّل عليهم زي أي نص (عدد الصفحات ممكن يختلف)'}</span></button>
+        <button class="imp-opt" data-a="keep">${ic('attach')}<b>ملف مرفق بس</b><span>بيفتح بعارض PDF، ومربوط بهالكتاب</span></button>
       </div>
       <div class="row end"><button class="btn ghost" data-a="cancel">إلغاء</button></div></div>`);
     const m = Modal.open(n, { cls: 'import-modal' });
@@ -1128,8 +1203,9 @@ const Import = {
       const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
       m.close();
       const a = b.dataset.a;
-      if (a === 'keep' || a === 'both') await Files.addFiles([f], { subjectId: Library.sid(Reader.book), bookId: Reader.book.id });
-      if (a === 'text' || a === 'both') { const c = await this.toPages(l, parsed); this.done(name, c); }
+      if (a === 'keep') await Files.addFiles([f], { subjectId: Library.sid(Reader.book), bookId: Reader.book.id });
+      if (a === 'text') { const c = await this.toPages(l, parsed); this.done(name, c); }
+      if (a === 'pages') { const c = await this.pdfPages(l, f); if (c) Toast.show({ icon: 'check', title: `انضاف «${name}» ✦`, text: `${c} ${c === 1 ? 'صفحة' : 'صفحات'} بنفس شكلها. اكتب أو لزّق ملاحظات فوقها.`, timeout: 4500 }); }
     };
     setTimeout(() => $('.imp-opt.rec', n)?.focus(), 30);
   },
@@ -1142,17 +1218,17 @@ const Import = {
     const nb = { id: 'k' + uid(), subjectId: Library.cur || NO_SUBJECT, title, author: '', dir: Settings.d.dir, cover: { color: COVER_COLORS[(Library.books.length + 1) % COVER_COLORS.length][0], image: null }, paper: Settings.newPaper(), series: null, music: { track: 'default', auto: null }, pageIds: [], created: Date.now(), updated: Date.now(), lastSpread: 0 };
     const pages = [0, 1].map(() => ({ id: 'p' + uid(), bookId: nb.id, html: '', stickies: [], attach: [] }));
     pages.forEach(p => nb.pageIds.push(p.id));
+    const pdf = this.kind(f) === 'pdf';
     let parsed;
-    try { parsed = await this.parse(f); } catch (e) { Toast.show({ icon: 'x', title: 'ما قدرنا نقرأ الملف', text: e.message, timeout: 6000 }); return; }
-    if (this.kind(f) === 'pdf' && !(parsed.chars > 20)) { await Files.addFiles([f], { subjectId: Library.cur || NO_SUBJECT }); return; }
+    if (!pdf) try { parsed = await this.parse(f); } catch (e) { Toast.show({ icon: 'x', title: 'ما قدرنا نقرأ الملف', text: e.message, timeout: 6000 }); return; }
     await DB.putMany('pages', pages); await DB.put('books', nb);
     await Library.load();
     await Reader.open(nb.id, 0);
     await new Promise(r => setTimeout(r, 350));
     const l = Editor.live.get(0) || [...Editor.live.values()][0];
     if (!l) return;
-    const c = await this.toPages(l, parsed, { replace: true });
-    if (this.kind(f) === 'pdf') await Files.addFiles([f], { subjectId: nb.subjectId, bookId: nb.id });
-    Toast.show({ icon: 'books', title: `صار عندك كتاب «${title}» ✦`, text: `من الملف، على ${c} صفحات. غيّر غلافه واسمه من ⚙.`, timeout: 6000 });
+    const c = pdf ? await this.pdfPages(l, f, { replace: true }) : await this.toPages(l, parsed, { replace: true });
+    if (!c) return;
+    Toast.show({ icon: 'books', title: `صار عندك كتاب «${title}» ✦`, text: pdf ? `${c} صفحات زي الملف بالزبط. غيّر غلافه واسمه من ⚙.` : `من الملف، على ${c} صفحات. غيّر غلافه واسمه من ⚙.`, timeout: 6000 });
   },
 };
