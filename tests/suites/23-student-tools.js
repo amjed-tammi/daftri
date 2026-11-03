@@ -80,7 +80,7 @@ const SUITE = {
       expect((await DB.get('pages', dr.pageIds[0])).html).toContain('فكرة ثانية');
       T.clean();
     });
-    await T.test('ساعات الدراسة: جلسة الحبل بتنحسب لمادة الكتاب (الوقت الفعلي بس)', async () => {
+    await T.test('دقائق الدراسة: جلسة الحبل بتنحسب لمادة الكتاب (الوقت الفعلي بس)', async () => {
       localStorage.removeItem('studyLog');
       await Reader.open(b.id, 0); await T.sleep(600); T.quiet();
       Rope.start(25); await T.sleep(100);

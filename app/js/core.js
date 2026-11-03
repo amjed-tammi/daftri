@@ -43,9 +43,12 @@ function pickFile(accept, multiple = false) {
 }
 
 function fmtTime(sec) {
-  sec = Math.max(0, Math.round(sec));
-  const m = Math.floor(sec / 60), s = sec % 60;
-  return m + ':' + String(s).padStart(2, '0');
+  // التسجيلات القصيرة تُعرض بجزء من الدقيقة، من دون عرض الثواني.
+  return String(Math.ceil(Math.max(0, sec) / 6) / 10) + ' د';
+}
+function fmtCountdown(sec) {
+  const total = Math.ceil(Math.max(0, sec));
+  return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
 }
 
 /* ============ الأيقونات ============ */
@@ -210,18 +213,9 @@ const Media = {
     ids.forEach(id => { const u = this.urls.get(id); if (u) { URL.revokeObjectURL(u); this.urls.delete(id); } });
     if (ids.length) await DB.delMany('blobs', ids);
   },
-  // تصغير الصورة لتوفير الذاكرة والمساحة
+  // نحفظ الملف الأصلي حتى تبقى دقة الصورة كاملة عند التكبير والتصدير.
   async downscale(file, max = 1100) {
-    try {
-      const bmp = await createImageBitmap(file);
-      const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-      bmp.close && bmp.close();
-      const b = await new Promise(r => c.toBlob(r, 'image/webp', 0.86));
-      return b || file;
-    } catch { return file; }
+    return file;
   },
   // ربط عناصر الوسائط بعناوينها
   hydrate(root) {
@@ -392,6 +386,7 @@ const Pop = {
   cur: null, onclose: null,
   open(anchor, content, { cls = '', place = 'below', gap = 8 } = {}) {
     this.close();
+    if (anchor instanceof Element && anchor.closest('#studyRail')) cls += ' left-rail-pop';
     const p = el(`<div class="pop ${cls}"></div>`);
     p.append(content);
     document.body.append(p);

@@ -100,8 +100,10 @@ const Music = {
   rename(id, name) { const t = this.tracks.find(x => x.id === id); if (t && name.trim()) { t.name = name.trim().slice(0, 50); this.save(); } },
 
   ui() {
-    const b = $('#btnSound');
-    if (b) { b.classList.toggle('on', !this.audio.paused); b.title = !this.audio.paused ? `الموسيقى: ${this.name(this.cur)}` : 'موسيقى الخلفية'; }
+    ['#btnSound', '#btnSoundLib'].forEach(id => {
+      const b = $(id);
+      if (b) { b.classList.toggle('on', !this.audio.paused); b.title = !this.audio.paused ? `الموسيقى: ${this.name(this.cur)}` : 'موسيقى الخلفية'; }
+    });
     const p = Pop.cur && Pop.cur.querySelector('.music-panel');
     if (p) this.sync(p);
   },

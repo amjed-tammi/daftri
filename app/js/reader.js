@@ -1,12 +1,12 @@
 'use strict';
 /* ============ القارئ: عرض الكتاب وتقليب الصفحات ============ */
-const PW = 600, PH = 850; // مقاس الصفحة المنطقي (يُكبَّر/يُصغَّر حسب الشاشة)
+const PW = 600, PH = 850; // نسبة الصفحة تقارب A4: ‏210 × 297 مم
 const FONTS = [['hand', 'يدوي'], ['classic', 'كلاسيكي'], ['modern', 'حديث'], ['type', 'آلة كاتبة']];
 const INKS = ['#1f2a5a', '#222222', '#5a3a1e', '#1d5a3c', '#7a1f2f', '#3b3f8f', '#f4f1e8', '#ffd479', '#8fd3ff', '#b6f0c2'];
 const LINE_COLORS = [['auto', 'تلقائي'], ['#7fa6d9', 'أزرق'], ['#b8b0a0', 'رمادي'], ['#c9a27a', 'بني'], ['#8cc2a4', 'أخضر'], ['#e8a0b4', 'وردي']];
 
 const Reader = {
-  book: null, pages: [], s: -1, busy: false, scale: 1,
+  book: null, pages: [], s: -1, busy: false, scale: 1, zoom: 1, panX: 0, panY: 0,
 
   async open(bookId, gotoPage = null) {
     const b = await DB.get('books', bookId);
@@ -49,6 +49,8 @@ const Reader = {
     Editor.unbindAll();
     Pop.close();
     this.book = null; this.pages = [];
+    document.body.classList.remove('left-tools-open');
+    $('#studyToggle').setAttribute('aria-expanded', 'false');
     $('#reader').hidden = true;
     $('#library').hidden = false;
     Editor.dockSync();
@@ -106,20 +108,43 @@ const Reader = {
   narrow() { return innerWidth <= 820 && innerWidth < innerHeight; },
   layout() {
     if (!this.book) return;
-    // نترك مكاناً للحبل على اليسار
-    // وإذا شريط التنسيق مثبّت تحت، نرفع الكتاب شوي ونصغّره حتى ما يغطيه
-    const dock = document.body.classList.contains('fmt-docked') ? 62 : 0;
     const nar = this.narrow();
     document.body.classList.toggle('narrow', nar);
     let s, dx = 0;
     if (nar) {
-      s = Math.min((innerWidth - 12) / PW, (innerHeight - 24 - dock) / (PH + 16));
+      s = Math.min((innerWidth - 80) / PW, (innerHeight - 16) / (PH + 16));
       // الصفحة الظاهرة: الأولى أو الثانية من الفتحة (العربي: الأولى يمين)
       if (this.s >= 0) { const first = this.book.dir === 'rtl' ? 'right' : 'left', side = this.half ? (first === 'right' ? 'left' : 'right') : first; dx = (side === 'right' ? -300 : 300) * s; }
-    } else s = Math.min((innerWidth - 190) / (2 * PW + 30), (innerHeight - 24 - dock) / (PH + 16));
+    } else {
+      // نحافظ على نسبة A4 في الكتاب نفسه؛ نلائم الفتحة مع عرض الشاشة وارتفاعها.
+      s = Math.min((innerWidth - 116) / (2 * PW), (innerHeight - 8) / (PH + 8));
+    }
+    s *= this.zoom;
     this.scale = s;
-    $('#book').style.top = dock ? `calc(50% - ${dock / 2}px)` : '';
-    $('#book').style.transform = `translate(-50%,-50%) translateX(${dx}px) scale(${s})`;
+    const bookStyle = $('#book').style;
+    bookStyle.setProperty('--page-width', PW + 'px');
+    bookStyle.setProperty('--book-width', 2 * PW + 'px');
+    bookStyle.setProperty('--half-page-width', PW / 2 + 'px');
+    bookStyle.setProperty('--negative-half-page-width', -PW / 2 + 'px');
+    $('#book').style.top = '';
+    const maxX = Math.max(0, (2 * PW * s - (innerWidth - 90)) / 2);
+    const maxY = Math.max(0, (850 * s - (innerHeight - 18)) / 2);
+    this.panX = clamp(this.panX, -maxX, maxX);
+    this.panY = clamp(this.panY, -maxY, maxY);
+    const offset = dx - (nar ? 38 : 0) + this.panX;
+    $('#book').style.transform = `translate(-50%,-50%) translate(${offset}px,${this.panY}px) scale(${s})`;
+    const root = document.body.style;
+    const bookTop = (innerHeight - PH * s) / 2 + this.panY;
+    root.setProperty('--book-top', Math.max(6, bookTop) + 'px');
+    root.setProperty('--book-seam', (innerWidth / 2 + offset) + 'px');
+    root.setProperty('--dial-top', Math.max(4, bookTop) + 'px');
+    root.setProperty('--book-left', Math.max(6, innerWidth / 2 + offset - PW * s - 52) + 'px');
+    root.setProperty('--book-right', Math.min(innerWidth - 52, innerWidth / 2 + offset + PW * s + 8) + 'px');
+  },
+  setZoom(value) {
+    this.zoom = clamp(value, .75, 2);
+    if (this.zoom <= 1) { this.panX = 0; this.panY = 0; }
+    this.layout();
   },
 
   /* بناء الصفحات */
@@ -357,6 +382,8 @@ const Reader = {
     if (!this.book) return;
     const b = this.book;
     $('#tbTitle').textContent = b.title;
+    $('#tbInfo').title = `الكتاب: ${b.title}`;
+    $('#tbInfo').setAttribute('aria-label', `الكتاب: ${b.title}`);
     const ser = Library.seriesOf(b);
     const sb = $('#tbSeries');
     sb.innerHTML = '';

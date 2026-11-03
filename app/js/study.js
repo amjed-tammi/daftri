@@ -67,7 +67,7 @@ const Study = {
     }
   },
 
-  /* ===== ساعات الدراسة لكل مادة (من جلسات الحبل) ===== */
+  /* ===== دقائق الدراسة لكل مادة (من جلسات الحبل) ===== */
   log() { try { return JSON.parse(localStorage.getItem('studyLog') || '[]'); } catch { return []; } },
   logMinutes(mins, sid = NO_SUBJECT) {
     mins = Math.round(mins);
@@ -82,10 +82,10 @@ const Study = {
     const subj = [...by].map(([s, m]) => ({ s, m, name: s === NO_SUBJECT ? 'عام' : Library.subjectName(s), color: (Library.subject(s) || {}).color || '#8fa3c8' })).sort((a, b) => b.m - a.m);
     return { total: L.reduce((t, x) => t + x.m, 0), today: L.filter(x => x.d === ymd()).reduce((t, x) => t + x.m, 0), subj };
   },
-  hm(m) { const h = Math.floor(m / 60), r = m % 60; return h ? `${h} س${r ? ` و${r} د` : ''}` : `${r} د`; },
+  hm(m) { return `${m} د`; },
   weekHTML() {
     const w = this.week();
-    if (!w.total) return '<div class="wk"><p class="muted sm">⏱ لسا ما في جلسات هالأسبوع — اسحب الحبل وابدأ، وبتنحسب ساعات كل مادة هون.</p></div>';
+    if (!w.total) return '<div class="wk"><p class="muted sm">⏱ لسا ما في جلسات هالأسبوع — اسحب الحبل وابدأ، وبتنحسب دقائق كل مادة هون.</p></div>';
     const max = Math.max(...w.subj.map(x => x.m));
     return `<div class="wk"><div class="wk-top"><b>⏱ هالأسبوع: ${this.hm(w.total)}</b><span class="muted sm">اليوم: ${this.hm(w.today)}</span></div>
       ${w.subj.map(x => `<div class="wk-row"><span class="wk-n" dir="auto">${esc(x.name)}</span><span class="wk-bar"><i style="width:${Math.max(4, Math.round(x.m / max * 100))}%;background:${x.color}"></i></span><span class="wk-m">${this.hm(x.m)}</span></div>`).join('')}</div>`;

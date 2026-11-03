@@ -242,7 +242,7 @@ const Rope = {
     this.knot.addEventListener('pointermove', mv); this.knot.addEventListener('pointerup', up); this.knot.addEventListener('pointercancel', up);
   },
   start(mins) {
-    // المادة: من الكتاب اللي إنت فيه (لحساب ساعات كل مادة)
+    // المادة: من الكتاب اللي إنت فيه (لحساب دقائق كل مادة)
     this.run = { total: mins * 60e3, end: Date.now() + mins * 60e3, paused: 0, sid: Reader.book ? Library.sid(Reader.book) : NO_SUBJECT };
     this.save(); this.swing(); this.startTick();
     if (!Study.session) Study.sessionStart(mins);
@@ -251,11 +251,13 @@ const Rope = {
   startTick() { clearInterval(this.iv); this.iv = setInterval(() => this.paint(), 1000); this.paint(); },
   remaining() { const r = this.run; return !r ? 0 : r.paused ? r.paused : Math.max(0, r.end - Date.now()); },
   paint() {
-    if (!this.run) { this.setLen(this.L0); this.label(''); $('#rope').classList.remove('running', 'paused'); return; }
+    const dial = $('#sessionDial'), time = $('#sessionTime');
+    if (!this.run) { this.setLen(this.L0); this.label(''); $('#rope').classList.remove('running', 'paused'); if (dial) { dial.style.setProperty('--session-progress', '100%'); time.textContent = 'ابدأ'; } return; }
     const rem = this.remaining();
+    if (dial) { dial.style.setProperty('--session-progress', (rem / this.run.total * 100) + '%'); time.textContent = fmtCountdown(rem / 1000); }
     const L = this.L0 + (rem / 60e3) * this.ppm();
     this.setLen(L);
-    this.label(fmtTime(rem / 1000));
+    this.label(fmtCountdown(rem / 1000));
     $('#rope').classList.add('running');
     $('#rope').classList.toggle('paused', !!this.run.paused);
     if (!this.run.paused && rem <= 0) this.finish();
@@ -278,7 +280,7 @@ const Rope = {
   },
   menu() {
     const items = this.run ? [
-      { head: 'المتبقي ' + fmtTime(this.remaining() / 1000) },
+      { head: 'المتبقي ' + fmtCountdown(this.remaining() / 1000) },
       this.run.paused ? { icon: 'play', label: 'استئناف', act: () => { this.run.end = Date.now() + this.run.paused; this.run.paused = 0; this.save(); this.paint(); } }
         : { icon: 'pause', label: 'إيقاف مؤقت', act: () => { this.run.paused = this.remaining(); this.save(); this.paint(); } },
       { icon: 'plus', label: '+5 دقائق', act: () => { if (this.run.paused) this.run.paused += 5 * 60e3; else this.run.end += 5 * 60e3; this.run.total += 5 * 60e3; this.save(); this.paint(); } },
@@ -287,7 +289,7 @@ const Rope = {
       { head: 'اسحب الحبل لأسفل لتحديد الوقت' },
       ...[5, 15, 25, 45, 60].map(m => ({ icon: 'timer', label: `${m} دقيقة`, act: () => this.start(m) })),
     ];
-    Menu.open(this.knot, items);
+    Menu.open(!$('#reader').hidden ? $('#sessionDial') : this.knot, items);
   },
   retract() {
     const from = this.len, t0 = performance.now();
@@ -395,7 +397,7 @@ const Reminders = {
   TEMPLATES: [
     { icon: '💧', title: 'اشرب مي', text: 'كاسة مي هلّأ بتفرق مع تركيزك.', every: 40 },
     { icon: '🚶', title: 'قوم تحرّك', text: 'قوم امشي دقيقتين ومدّ ظهرك.', every: 50 },
-    { icon: '👀', title: 'ريّح عيونك', text: 'طلّع على شي بعيد ٢٠ ثانية.', every: 20 },
+    { icon: '👀', title: 'ريّح عيونك', text: 'طلّع على شي بعيد لثلث دقيقة.', every: 20 },
     { icon: '🧘', title: 'نفس عميق', text: 'خذ ٣ أنفاس عميقة وارجع.', every: 60 },
     { icon: '📵', title: 'بعّد الجوال', text: 'خلي الجوال بعيد لحد ما تخلص.', every: 30 },
   ],
@@ -404,7 +406,10 @@ const Reminders = {
     try { Object.assign(this.cfg, JSON.parse(localStorage.getItem('remCfg') || '{}')); } catch { }
     try { this.list = JSON.parse(localStorage.getItem('reminders') || '[]'); } catch { this.list = []; }
     const now = Date.now();
-    this.list.forEach(r => { if (!r.last || now - r.last > 6 * 3600e3) r.last = now; });
+    this.list.forEach(r => {
+      r.every = clamp(+r.every || 30, 1, 600);
+      if (!Number.isFinite(+r.last) || +r.last <= 0 || +r.last > now) r.last = now;
+    });
     this.save();
     setInterval(() => this.tick(), 20000);
   },
@@ -416,14 +421,16 @@ const Reminders = {
   fire(r) {
     if (this.cfg.sound) Sound.chime(true);
     Toast.show({
-      emoji: r.icon, title: r.title, text: r.text || '', cls: 'rem', timeout: 60000, actions: [
-        { label: 'بعد ٥ د', act: () => { r.last = Date.now() - (r.every - 5) * 60e3; this.save(); } },
-        { label: 'تم ✓', primary: true },
-      ],
+      emoji: r.icon, title: r.title, text: r.text || '', cls: 'rem', timeout: 4000,
     });
     if (this.cfg.sys && document.hidden && window.Notification && Notification.permission === 'granted') new Notification(`${r.icon} ${r.title}`, { body: r.text || '' });
   },
   add(t) { const r = { id: 'r' + uid(), icon: t.icon || '⏰', title: t.title, text: t.text || '', every: clamp(+t.every || 30, 1, 600), on: true, last: Date.now() }; this.list.push(r); this.save(); return r; },
+  nextLabel(r, now = Date.now()) {
+    if (!r.on) return 'التنبيه متوقف';
+    const minutes = Math.ceil((+r.last + r.every * 60000 - now) / 60000);
+    return minutes <= 0 ? 'التنبيه الآن' : `التنبيه القادم بعد ${minutes} دقيقة`;
+  },
   panel(anchor) {
     const n = el(`<div class="panel rem-panel">
       <h4>${ic('bell')} تذكيراتي</h4>
@@ -443,16 +450,23 @@ const Reminders = {
       <div class="row"><button class="btn ghost sm" data-a="music">${ic('music')} الموسيقى</button><button class="btn ghost sm" data-a="journal">${ic('journal')} يومياتي</button></div>
     </div>`);
     let emoji = this.EMOJIS[11];
+    const updateTimes = () => {
+      $$('.rem-item', n).forEach(row => {
+        const r = this.list.find(x => x.id === row.dataset.id);
+        if (r) $('.rem-next', row).textContent = this.nextLabel(r);
+      });
+    };
     const render = () => {
       $('.rem-list', n).innerHTML = this.list.length ? this.list.map(r => `<div class="rem-item ${r.on ? '' : 'off'}" data-id="${r.id}">
           <span class="rem-ic">${esc(r.icon)}</span>
-          <div class="rem-t"><b dir="auto">${esc(r.title)}</b><small>كل ${r.every} دقيقة${r.text ? ' · ' + esc(r.text) : ''}</small></div>
+          <div class="rem-t"><b dir="auto">${esc(r.title)}</b><small>يتكرر كل ${r.every} دقيقة${r.text ? ' · ' + esc(r.text) : ''}</small><small class="rem-next"></small></div>
           <label class="sw-toggle" title="تشغيل/إيقاف"><input type="checkbox" data-t="on" ${r.on ? 'checked' : ''}><i></i></label>
           <button class="ib" data-t="test" title="جرّبه">${ic('play')}</button>
           <button class="ib" data-t="del" title="حذف">${ic('trash')}</button></div>`).join('')
         : '<p class="muted rem-empty">ما في تذكيرات لسا. ضيف من الاقتراحات أو اعمل تذكير خاص فيك 👇</p>';
       const have = new Set(this.list.map(r => r.title));
       $('.rem-sugg', n).innerHTML = this.TEMPLATES.filter(t => !have.has(t.title)).map(t => `<button type="button" data-tpl="${esc(t.title)}">${t.icon} ${esc(t.title)} <small>كل ${t.every} د</small></button>`).join('') || '<small class="muted">ضفت كل الاقتراحات ✓</small>';
+      updateTimes();
     };
     n.addEventListener('click', e => {
       const tpl = e.target.closest('[data-tpl]');
@@ -480,7 +494,7 @@ const Reminders = {
     n.addEventListener('change', async e => {
       if (e.target.dataset.t === 'on') {
         const r = this.list.find(x => x.id === e.target.closest('.rem-item').dataset.id);
-        r.on = e.target.checked; r.last = Date.now(); this.save(); e.target.closest('.rem-item').classList.toggle('off', !r.on); return;
+        r.on = e.target.checked; r.last = Date.now(); this.save(); e.target.closest('.rem-item').classList.toggle('off', !r.on); updateTimes(); return;
       }
       const k = e.target.dataset.k; if (!k) return;
       this.cfg[k] = e.target.checked;
@@ -492,21 +506,28 @@ const Reminders = {
     });
     render();
     Pop.open(anchor, n, { cls: 'panel-pop', place: 'above' });
+    const refresh = setInterval(() => { if (!n.isConnected) clearInterval(refresh); else updateTimes(); }, 20000);
   },
 };
 
 /* ============ التصدير PDF ============ */
 const Exporter = {
+  hasContent(p) {
+    if (p.bg || (p.stickies || []).length || (p.attach || []).length) return true;
+    const content = document.createElement('div');
+    content.innerHTML = p.html || '';
+    return !!content.textContent.replace(/\u00a0/g, ' ').trim() || !!content.querySelector('img,video,audio,figure,table,hr,pre,svg,canvas,iframe,a[href],.cb');
+  },
   // قبل الطباعة: كل الدفتر، أو الصفحتين اللي قدامك، أو من صفحة لصفحة (مثلاً الفصل الثالث بس)
   choose() {
     const R = Reader; if (!R.book) return;
     Editor.flushAll();
-    const empty = p => !p.html && !p.bg && !(p.stickies || []).length && !(p.attach || []).length;
-    let last = R.pages.length - 1; while (last > 0 && empty(R.pages[last])) last--;
+    const last = R.pages.length - 1;
+    const printable = R.pages.filter(p => this.hasContent(p)).length;
     const s0 = Math.max(0, 2 * R.s), s1 = Math.min(last, s0 + 1);
     const n = el(`<form class="prt" autocomplete="off">
-      <div class="jf-head">${ic('pdf')}<div><h3>طباعة / PDF</h3><p class="muted">من نافذة الطباعة اختار «حفظ كـ PDF» إذا بدك ملف.</p></div></div>
-      <label class="prt-o"><input type="radio" name="w" value="all" checked> <span><b>كل الدفتر</b> <small>${last + 1} صفحة مع الغلاف</small></span></label>
+      <div class="jf-head">${ic('pdf')}<div><h3>طباعة / PDF</h3><p class="muted">كل صفحة على ورقة A4 عمودية (210 × 297 مم). اختار «حفظ كـ PDF» من نافذة الطباعة إذا بدك ملف.</p></div></div>
+      <label class="prt-o"><input type="radio" name="w" value="all" checked> <span><b>كل الدفتر</b> <small>${printable} صفحة فيها محتوى + الغلاف؛ الفارغة تُستبعد</small></span></label>
       ${R.s >= 0 ? `<label class="prt-o"><input type="radio" name="w" value="here"> <span><b>الصفحات اللي قدامي</b> <small>${s0 + 1}${s1 > s0 ? '–' + (s1 + 1) : ''}</small></span></label>` : ''}
       <label class="prt-o"><input type="radio" name="w" value="range"> <span><b>من صفحة</b> <input class="inp prt-n" type="number" name="from" min="1" max="${last + 1}" value="${s0 + 1}"> <b>لـ</b> <input class="inp prt-n" type="number" name="to" min="1" max="${last + 1}" value="${Math.min(last + 1, s0 + 4)}"></span></label>
       <div class="row end"><button type="button" class="btn ghost" data-a="cancel">إلغاء</button><button class="btn primary">${ic('pdf')} اطبع</button></div></form>`);
@@ -530,20 +551,25 @@ const Exporter = {
     setTimeout(() => { this.busy = false; }, 4000);
     Editor.flushAll();
     Pop.close(); Editor.hideBars();
+    const from = range ? range.from : 0, to = range ? Math.min(range.to, R.pages.length - 1) : R.pages.length - 1;
+    const pageIndices = R.pages.map((p, i) => i).filter(i => i >= from && i <= to && this.hasContent(R.pages[i]));
+    if (range && !pageIndices.length) {
+      this.busy = false;
+      Toast.show({ icon: 'pdf', text: 'الصفحات المحددة فارغة، ما في شيء للطباعة.' });
+      return;
+    }
     const box = $('#print');
     box.innerHTML = '';
     box.className = R.paperClasses();
     box.removeAttribute('style');
     const v = R.paperVars();
     for (const k in v) box.style.setProperty(k, v[k]);
-    const empty = p => !p.html && !(p.stickies || []).length && !(p.attach || []).length;
-    let last = R.pages.length - 1;
-    while (last > 0 && empty(R.pages[last])) last--;
-    const add = (node, cls = '') => { const s = el(`<section class="pp ${cls}"></section>`); s.append(node); box.append(s); return s; };
+    box.style.setProperty('--print-page-width', PW + 'px');
+    box.style.setProperty('--print-page-zoom', String(1.3184 * 600 / PW));
+    const add = (node, cls = '', page = '') => { const s = el(`<section class="pp ${cls}"${page ? ` data-book-page="${page}"` : ''}></section>`); s.append(node); box.append(s); return s; };
     // الغلاف بس لما تطبع الدفتر كله
     if (!range) add(R.coverPage('right'), 'pp-cover').style.setProperty('--cvbg', (R.book.cover && R.book.cover.color) || '#1d2b53');
-    const from = range ? range.from : 0, to = range ? Math.min(range.to, R.pages.length - 1) : last;
-    for (let i = from; i <= to; i++) add(R.pageEl(i, false, R.sideOfIndex(i)));
+    for (const i of pageIndices) add(R.pageEl(i, false, R.sideOfIndex(i)), '', i + 1);
     $$('figure.media video, .sticky.video video', box).forEach(vd => vd.replaceWith(el(`<div class="vid-ph">${ic('film')}<span>فيديو مرفق داخل الدفتر</span></div>`)));
     $$('.flipzone', box).forEach(x => x.remove());
     Toast.show({ icon: 'pdf', title: 'تصدير PDF', text: 'من نافذة الطباعة اختر «حفظ كـ PDF» أو «Microsoft Print to PDF» واضغط حفظ.', timeout: 6000 });

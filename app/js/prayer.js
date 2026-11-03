@@ -70,7 +70,7 @@ const Prayer = {
     return tm || null;
   },
   fmt(d) { return d.toLocaleTimeString('ar', { hour: 'numeric', minute: '2-digit' }); },
-  rel(ms) { const m = Math.max(0, Math.round(ms / 60e3)); if (m < 1) return 'هلّق'; if (m < 60) return `بعد ${m} د`; const h = Math.floor(m / 60), r = m % 60; return `بعد ${h} س${r ? ` و${r} د` : ''}`; },
+  rel(ms) { const m = Math.max(0, Math.ceil(ms / 60e3)); return m < 1 ? 'هلّق' : `بعد ${m} د`; },
   // بالمكتبة (جنب «مطلوب اليوم»)
   chipHTML() {
     if (!this.c.on) return '';

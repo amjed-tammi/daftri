@@ -759,6 +759,7 @@ const Stickies = {
       ${video ? '' : `<div class="stx${photo ? ' cap' : ''}" ${live ? 'contenteditable="true"' : ''} spellcheck="false" dir="auto" ${photo ? 'data-ph="اكتب تعليقاً…"' : 'data-ph="ملاحظة…"'}>${s.text || ''}</div>`}
       ${live ? `<button class="s-x" title="حذف">${ic('x')}</button>
         <button class="s-w" title="${wrap ? 'النص حواليها — اضغط لتصير فوق النص' : 'فوق النص — اضغط ليلتف النص حواليها'}">${ic(wrap ? 'wrapon' : 'wrapoff')}</button>
+        ${photo ? `<button class="s-view" title="افتح الصورة بشاشة كاملة">${ic('focus')}</button>` : ''}
         ${photo || video ? '' : '<button class="s-c" title="تغيير اللون"></button>'}<div class="s-rz" title="تغيير الحجم"></div>` : ''}
     </div>`);
     if (!live) return d;
@@ -777,7 +778,7 @@ const Stickies = {
     d.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       const t = e.target;
-      if (t.closest('.s-x,.s-c,.s-w')) return;
+      if (t.closest('.s-x,.s-c,.s-w,.s-view')) return;
       if (t.closest('video')) return; // أزرار الفيديو نفسه
       const rz = t.closest('.s-rz');
       const arr = p.stickies; const k = arr.indexOf(s);
@@ -786,22 +787,50 @@ const Stickies = {
       e.preventDefault();
       const sx = e.clientX, sy = e.clientY, x0 = s.x, y0 = s.y, w0 = s.w, k2 = Reader.scale;
       try { d.setPointerCapture(e.pointerId); } catch { } d.classList.add('drag');
-      let raf = 0;
+      let ghost = null, drop = null;
+      const originalRect = d.getBoundingClientRect();
+      const clearPreview = () => { ghost?.remove(); if (drop) drop.classList.remove('dropping'); ghost = drop = null; };
       const mv = ev => {
         const dx = (ev.clientX - sx) / k2, dy = (ev.clientY - sy) / k2;
         if (rz) { s.w = Math.round(clamp(w0 + dx, video ? 180 : 110, 540)); d.style.width = s.w + 'px'; }
         else {
-          s.x = Math.round(clamp(x0 + dx, -s.w + 60, PW - 60)); s.y = Math.round(clamp(y0 + dy, -30, PH - 60));
-          d.style.left = s.x + 'px'; d.style.top = s.y + 'px';
+          if (!ghost && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) {
+            ghost = d.cloneNode(true);
+            ghost.classList.add('drag-preview');
+            ghost.style.cssText = `position:fixed;left:${originalRect.left}px;top:${originalRect.top}px;width:${w0}px;transform:scale(${k2}) rotate(var(--rot));transform-origin:top left;pointer-events:none;z-index:170;opacity:.85`;
+            document.body.append(ghost);
+            d.style.opacity = '.3';
+          }
+          if (ghost) {
+            ghost.style.left = originalRect.left + ev.clientX - sx + 'px';
+            ghost.style.top = originalRect.top + ev.clientY - sy + 'px';
+          }
+          const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot > .page[data-i]');
+          if (drop && drop !== target) drop.classList.remove('dropping');
+          drop = target && target !== pg ? target : null;
+          if (drop) drop.classList.add('dropping');
+          if (!drop) {
+            s.x = Math.round(clamp(x0 + dx, -s.w + 60, PW - 60)); s.y = Math.round(clamp(y0 + dy, -30, PH - 60));
+            d.style.left = s.x + 'px'; d.style.top = s.y + 'px';
+          }
         }
-        if (!raf) raf = requestAnimationFrame(() => { raf = 0; s.h = d.offsetHeight; Wrap.apply(pg, p); });
       };
-      const up = () => {
-        d.removeEventListener('pointermove', mv); d.removeEventListener('pointerup', up); d.classList.remove('drag');
+      const up = ev => {
+        d.removeEventListener('pointermove', mv); d.removeEventListener('pointerup', up); d.removeEventListener('pointercancel', up); d.classList.remove('drag'); d.style.opacity = '';
+        if (!rz && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) {
+          const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.slot > .page[data-i]');
+          if (target && target !== pg) {
+            const pos = Editor.pagePoint(target, ev.clientX, ev.clientY);
+            clearPreview();
+            this.move(s, p, +target.dataset.i, { x: pos.x - (sx - originalRect.left) / k2, y: pos.y - (sy - originalRect.top) / k2 });
+            return;
+          }
+        }
+        clearPreview();
         s.h = d.offsetHeight; Wrap.apply(pg, p); save();
         const l = Editor.liveOf(pg); if (l) Editor.reflow(l, false);
       };
-      d.addEventListener('pointermove', mv); d.addEventListener('pointerup', up);
+      d.addEventListener('pointermove', mv); d.addEventListener('pointerup', up); d.addEventListener('pointercancel', up);
     });
     $('.s-x', d).onclick = () => {
       const k = p.stickies.indexOf(s); if (k < 0) return;
@@ -809,6 +838,12 @@ const Stickies = {
       let undone = false;
       Toast.show({ icon: 'trash', text: photo ? 'حُذفت الصورة' : video ? 'حُذف الفيديو' : 'حُذفت الملاحظة', timeout: 6000, actions: [{ label: 'تراجع', act: () => { undone = true; p.stickies.push(s); Reader.render(); save(); } }] });
       if (s.blob) setTimeout(() => { if (!undone) Media.del(s.blob); }, 6500);
+    };
+    const view = $('.s-view', d);
+    if (view) view.onclick = async () => {
+      const src = await Media.url(s.blob);
+      if (!src) return;
+      $('#imageViewer img').src = src; $('#imageViewer').hidden = false; $('#imageViewerClose').focus();
     };
     $('.s-w', d).onclick = () => {
       s.wrap = !(s.wrap !== false);
@@ -825,6 +860,19 @@ const Stickies = {
       s.color = this.COLORS[i]; d.style.setProperty('--sc', s.color); save();
     };
     return d;
+  },
+  move(s, from, index, position) {
+    const to = Reader.pages[index];
+    if (!to || to === from) return;
+    const at = from.stickies.indexOf(s);
+    if (at < 0) return;
+    from.stickies.splice(at, 1);
+    (to.stickies = to.stickies || []).push(s);
+    s.x = Math.round(clamp(position?.x ?? s.x, 0, PW - s.w));
+    s.y = Math.round(clamp(position?.y ?? s.y, 0, PH - 80));
+    Editor.persist(from); Editor.persist(to);
+    Reader.render();
+    Toast.show({ icon: 'page', text: `انتقل العنصر إلى الصفحة ${index + 1}`, timeout: 2200 });
   },
   add(l, s) {
     (l.p.stickies = l.p.stickies || []).push(s);
@@ -845,8 +893,7 @@ const Stickies = {
     files = files.slice(0, 8);
     let k = 0;
     for (const f of files) {
-      const b = await Media.downscale(f, 900);
-      const id = await Media.save(b);
+      const id = await Media.save(f);
       const w = size;
       const bx = pt ? pt.x - w / 2 : 70, by = pt ? pt.y - 60 : 110;
       this.add(l, { id: uid(), kind: 'photo', blob: id, w, x: Math.round(clamp(bx + k * 28, -60, PW - w + 40)), y: Math.round(clamp(by + k * 34, 0, PH - 200)), rot: +(Math.random() * 8 - 4).toFixed(1), text: '' });

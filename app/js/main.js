@@ -33,18 +33,103 @@
   };
   $('#btnNight').onclick = e => Reminders.panel(e.currentTarget);
   $('#btnSound').onclick = e => Music.panel(e.currentTarget);
+  $('#btnNightLib').onclick = e => Reminders.panel(e.currentTarget);
+  $('#btnSoundLib').onclick = e => Music.panel(e.currentTarget);
+  $('#studyToggle').onclick = () => {
+    const open = document.body.classList.toggle('left-tools-open');
+    $('#studyToggle').setAttribute('aria-expanded', String(open));
+    $('#studyToggle').setAttribute('aria-label', open ? 'أغلق أدوات الكتاب والدراسة' : 'افتح أدوات الكتاب والدراسة');
+    $('#studyToggle').title = open ? 'أغلق أدوات الكتاب والدراسة' : 'افتح أدوات الكتاب والدراسة';
+    if (!open) Pop.close();
+  };
+  $('#toolToggle').onclick = () => {
+    if (!Editor.docked()) Editor.setDock(true);
+    const open = document.body.classList.toggle('tools-open');
+    $('#toolToggle').setAttribute('aria-expanded', String(open));
+    $('#toolToggle').setAttribute('aria-label', open ? 'أغلق أدوات الكتابة' : 'افتح أدوات الكتابة');
+    $('#toolToggle').title = open ? 'أغلق أدوات الكتابة' : 'افتح أدوات الكتابة';
+  };
+  $('#stage').addEventListener('wheel', e => {
+    if (e.ctrlKey) { e.preventDefault(); Reader.setZoom(Reader.zoom * Math.exp(-e.deltaY * .0015)); return; }
+    if (Reader.zoom <= 1) return;
+    e.preventDefault();
+    Reader.panX -= (e.shiftKey ? e.deltaY : e.deltaX);
+    Reader.panY -= e.shiftKey ? 0 : e.deltaY;
+    Reader.layout();
+  }, { passive: false });
+  let spacePan = false, dragPan = null, pendingSpace = null;
+  const stopPan = () => { dragPan = null; document.body.classList.remove('space-dragging'); };
+  const releaseSpace = () => {
+    spacePan = false; stopPan(); document.body.classList.remove('space-panning');
+    const pending = pendingSpace; pendingSpace = null;
+    if (!pending || !pending.el.isConnected || document.activeElement !== pending.el) return;
+    Sel.restore(pending.range);
+    document.execCommand('insertText', false, ' ');
+  };
+  document.addEventListener('keydown', e => {
+    if (e.code !== 'Space' || e.ctrlKey || e.altKey || e.metaKey || $('#reader').hidden || Reader.zoom <= 1 || $('.modal-back') || Pop.cur) return;
+    const active = document.activeElement;
+    if (active && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(active.tagName)) return;
+    if (active && active.isContentEditable && !active.closest('#reader')) return;
+    if (active && active.isContentEditable && !spacePan) pendingSpace = { el: active, range: Sel.save() };
+    e.preventDefault(); spacePan = true; document.body.classList.add('space-panning');
+  });
+  // أي نقرة مع المسطرة هي محاولة تحريك/تحديد، فلا نضيف بعدها مسافة داخل النص.
+  document.addEventListener('pointerdown', () => { if (spacePan) pendingSpace = null; }, true);
+  document.addEventListener('keyup', e => { if (e.code === 'Space') releaseSpace(); });
+  addEventListener('blur', () => { pendingSpace = null; releaseSpace(); });
+  const stage = $('#stage');
+  stage.addEventListener('pointerdown', e => {
+    if (!spacePan || e.button !== 0 || Reader.zoom <= 1) return;
+    e.preventDefault(); e.stopPropagation();
+    pendingSpace = null;
+    dragPan = { x: e.clientX, y: e.clientY, panX: Reader.panX, panY: Reader.panY };
+    stage.setPointerCapture(e.pointerId);
+    document.body.classList.add('space-dragging');
+  }, true);
+  stage.addEventListener('pointermove', e => {
+    if (!dragPan) return;
+    Reader.panX = dragPan.panX + e.clientX - dragPan.x;
+    Reader.panY = dragPan.panY + e.clientY - dragPan.y;
+    Reader.layout();
+  });
+  stage.addEventListener('pointerup', stopPan);
+  stage.addEventListener('pointercancel', stopPan);
+  $('#sessionDial').onclick = () => Rope.menu();
+  const viewer = $('#imageViewer');
+  const closeImage = () => { viewer.hidden = true; $('img', viewer).removeAttribute('src'); };
+  $('#imageViewerClose').onclick = closeImage;
+  viewer.onclick = e => { if (e.target === viewer) closeImage(); };
+  document.addEventListener('click', e => {
+    const img = e.target.closest && e.target.closest('#reader .sticky.photo img, #reader .content img, #reader .pg-bg');
+    if (!img || !img.src || !viewer.hidden) return;
+    if (e.target.closest('.sticky.photo') && e.detail !== 2) return;
+    $('img', viewer).src = img.src; viewer.hidden = false; $('#imageViewerClose').focus();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !viewer.hidden) { closeImage(); e.stopImmediatePropagation(); } }, true);
   $('#btnSettings').onclick = () => Settings.panel();
   $('#streak').onclick = () => Study.journalPanel();
 
   // شريط الكتاب العلوي
   const curLive = () => Editor.live.get(Editor.curPage) || [...Editor.live.values()][0];
-  const fromTop = p => { if (Pop.cur) Pop.cur._from = '#topbar'; return p; };
+  const fromRail = () => { if (Pop.cur) Pop.cur._from = '#studyRail'; };
   $('#tbBack').onclick = () => Reader.close();
+  $('#tbInfo').onclick = e => {
+    const b = Reader.book; if (!b) return;
+    const series = Library.seriesOf(b);
+    Menu.open(e.currentTarget, [
+      { head: b.title },
+      ...(b.author ? [{ head: b.author }] : []),
+      { head: `${Reader.pages.length} صفحة` },
+      ...(series.length > 1 ? ['-', ...series.map(part => ({ icon: 'series', label: `${part.id === b.id ? '✓ ' : ''}الجزء ${part.series.part} · ${part.title}`, act: () => Reader.open(part.id) }))] : []),
+      '-', { icon: 'books', label: 'العودة للمكتبة', act: () => Reader.close() },
+    ]);
+  };
   $('#tbIndex').onclick = e => Finder.index(e.currentTarget);
   $('#tbWeb').onclick = () => IdeaWeb.open();
   $('#tbSearch').onclick = () => Finder.open();
   $('#tbFocus').onclick = () => Study.setFocus(!Study.focus);
-  $('#tbPaper').onclick = e => { Reader.paperPanel(e.currentTarget); fromTop(); };
+  $('#tbPaper').onclick = e => { Reader.paperPanel(e.currentTarget); fromRail(); };
   // «⋯»: الشغلات اللي ما بنحتاجها كل دقيقة، حتى يضل الشريط خفيف
   $('#tbMore').onclick = e => {
     Menu.open(e.currentTarget, [
@@ -52,7 +137,7 @@
       '-',
       ...Cmd.menu(['sheet', 'pdf', 'share', 'edit', 'mic', 'addpage', '-', 'pdfs', 'planBook', 'cal', 'journal', '-', 'full', 'tour', 'report']),
     ]);
-    fromTop();
+    fromRail();
   };
   $('#tbInsert').onclick = e => {
     const l = curLive();
@@ -79,7 +164,7 @@
       '-',
       { icon: 'addpage', label: 'إضافة صفحة بعد هذه', act: () => Reader.insertPageAfter(l.i) },
     ]);
-    fromTop();
+    fromRail();
   };
 
   // شريط التنقل السفلي

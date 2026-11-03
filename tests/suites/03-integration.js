@@ -73,13 +73,20 @@ const SUITE = {
         await T.shot('idea-web-linked');
         document.querySelector('#iw [data-a=close]').click(); await T.sleep(400);
       });
-      await T.test('PDF: كل صفحة مكتوبة بتنحط بورقة A4 والفيديو بيتبدل بعلامة', async () => {
+      await T.test('PDF: الغلاف والصفحات المكتوبة فقط بالترتيب، والفيديو بيتبدل بعلامة', async () => {
+        expect(Exporter.hasContent({ html: '<p><br></p>' })).toBe(false);
+        expect(Exporter.hasContent({ html: '&nbsp; ' })).toBe(false);
+        expect(Exporter.hasContent({ html: '', bg: 'scan' })).toBe(true);
+        expect(Exporter.hasContent({ html: '', stickies: [{ kind: 'photo' }] })).toBe(true);
         const realPrint = window.print; let printed = 0; window.print = () => { printed++; };
         await Exporter.pdf(); await T.sleep(300);
         window.print = realPrint;
         expect(printed).toBe(1);
-        const n = document.querySelectorAll('#print .pp').length;
-        expect(n).toBeGreaterThan(2);
+        const sheets = [...document.querySelectorAll('#print .pp')];
+        const numbered = Reader.pages.map((p, i) => Exporter.hasContent(p) ? i + 1 : null).filter(Boolean);
+        expect(sheets.length).toBe(numbered.length + 1);
+        expect(sheets[0].classList.contains('pp-cover')).toBe(true);
+        expect(sheets.slice(1).map(x => +x.dataset.bookPage).join(',')).toBe(numbered.join(','));
         expect(document.querySelectorAll('#print video').length).toBe(0);
         dispatchEvent(new Event('afterprint'));
         expect(document.querySelector('#print').children.length).toBe(0);

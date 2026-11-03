@@ -9,7 +9,7 @@ const PaperUI = {
       <div class="pu-sec"><h4>الورق</h4>
         <div class="seg wrap" data-k="style">${PAPER_STYLES.map(([v, t]) => `<button type="button" data-v="${v}"><i class="mini ps-${v}"></i>${t}</button>`).join('')}</div>
         <div class="swatches" data-k="tone">${PAPER_TONES.map(([v, t, c]) => `<button type="button" class="sw" data-v="${v}" title="${t}" style="--c:${c}"></button>`).join('')}</div>
-        <label class="rng"><span>المسافة بين السطور</span><input type="range" min="24" max="48" step="2" data-k="lh" value="${p.lh}"><b>${p.lh}</b></label>
+        <label class="rng"><span>المسافة بين السطور</span><input type="range" min="24" max="72" step="2" data-k="lh" value="${p.lh}"><b>${p.lh}</b></label>
         <div class="lbl">لون السطور</div>
         <div class="swatches" data-k="line">${LINE_COLORS.map(([c, t]) => `<button type="button" class="sw ${c === 'auto' ? 'auto' : ''}" data-v="${c}" title="${t}" style="--c:${c === 'auto' ? '#ccc' : c}"></button>`).join('')}</div>
         <label class="chk"><input type="checkbox" data-k="margin" ${p.margin ? 'checked' : ''}> <span>خط الهامش الأحمر</span></label>
@@ -20,7 +20,7 @@ const PaperUI = {
         <div class="fontlist" data-list="ar" hidden></div>
         <div class="fontrow"><span>الخط الإنجليزي</span><button type="button" class="fontpick" data-pick="en"></button></div>
         <div class="fontlist" data-list="en" hidden></div>
-        <label class="rng"><span>حجم الخط</span><input type="range" min="14" max="28" step="1" data-k="fs" value="${p.fs}"><b>${p.fs}</b></label>
+        <label class="rng"><span>حجم الخط</span><input type="range" min="12" max="52" step="1" data-k="fs" value="${p.fs}"><b>${p.fs}</b></label>
         <label class="rng"><span>حجم العربي مقابل الإنجليزي</span><input type="range" min="70" max="160" step="5" data-k="arScale" value="${p.arScale || 100}"><b>${p.arScale || 100}%</b></label>
         <div class="lbl">لون الحبر</div>
         <div class="swatches" data-k="ink">${INKS.map(c => `<button type="button" class="sw" data-v="${c}" style="--c:${c}"></button>`).join('')}</div>
@@ -65,7 +65,7 @@ const PaperUI = {
       if (k === 'arScale') { p.arScale = +e.target.value; e.target.nextElementSibling.textContent = p.arScale + '%'; sync(); onChange(k, false); return; }
       if (k === 'lh' || k === 'fs') {
         p[k] = +e.target.value;
-        if (k === 'fs') p.fs = Math.min(p.fs, Math.floor(p.lh * .8));
+        if (k === 'fs' && p.fs > p.lh * .8) { p.lh = Math.min(72, Math.ceil(p.fs / .8 / 2) * 2); const lhI = $('[data-k=lh]', n); lhI.value = p.lh; lhI.nextElementSibling.textContent = p.lh; }
         if (k === 'lh' && p.fs > p.lh * .8) { p.fs = Math.floor(p.lh * .8); const fsI = $('[data-k=fs]', n); fsI.value = p.fs; fsI.nextElementSibling.textContent = p.fs; }
         e.target.nextElementSibling.textContent = p[k];
         sync(); onChange(k, false);

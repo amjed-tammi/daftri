@@ -56,6 +56,7 @@ const SUITE = {
         const day = new Date(); day.setHours(15, 5, 0, 0);
         const n = Prayer.next(day);
         expect(n.ar).toBe('العصر'); expect(Prayer.rel(n.at - day)).toBe('بعد 25 د');
+        expect(Prayer.rel(125 * 60e3)).toBe('بعد 125 د');
         const late = new Date(); late.setHours(21, 0, 0, 0);
         expect(Prayer.next(late).ar).toBe('الفجر');
         await T.mouse.click(chip);

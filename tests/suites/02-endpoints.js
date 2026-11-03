@@ -6,6 +6,12 @@ const SUITE = {
     const realPick = pickFile, realDl = downloadBlob;
     let downloaded = null;
 
+    await T.test('المدد بالدقائق، والعداد وحده بالدقائق والثواني', () => {
+      expect(fmtTime(90)).toBe('1.5 د');
+      expect(fmtCountdown(26 * 60 + 16)).toBe('26:16');
+      expect(Study.hm(125)).toBe('125 د');
+    });
+
     await T.test('DB: put / get / getMany / putMany / del / delMany', async () => {
       await DB.put('journal', { id: 'x1', text: 'a' });
       expect((await DB.get('journal', 'x1')).text).toBe('a');
@@ -103,10 +109,16 @@ const SUITE = {
     });
     await T.test('التذكيرات: بتبدأ فاضية، بتنضاف، بتشتغل بوقتها، بتنحذف', async () => {
       expect(Reminders.list.length).toBe(0);
+      expect(Reminders.nextLabel({ on: true, last: 100000, every: 40 }, 100000)).toBe('التنبيه القادم بعد 40 دقيقة');
+      expect(Reminders.nextLabel({ on: true, last: 100000, every: 40 }, 100000 + 39 * 60000)).toBe('التنبيه القادم بعد 1 دقيقة');
+      expect(Reminders.nextLabel({ on: false, last: 100000, every: 40 }, 100000)).toBe('التنبيه متوقف');
       const r = Reminders.add({ icon: '💧', title: 'اشرب مي', every: 1 });
       r.last = Date.now() - 2 * 60e3;
       Reminders.tick(); await T.sleep(400);
       expect([...document.querySelectorAll('.toast b')].some(b => b.textContent === 'اشرب مي')).toBeTruthy();
+      expect(document.querySelectorAll('.toast.rem button').length).toBe(0);
+      await T.sleep(4100);
+      expect(document.querySelectorAll('.toast.rem').length).toBe(0);
       Reminders.list = Reminders.list.filter(x => x !== r); Reminders.save();
       expect(JSON.parse(localStorage.getItem('reminders')).length).toBe(0);
     });

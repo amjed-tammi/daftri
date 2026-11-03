@@ -137,7 +137,7 @@ const Finder = {
       Pop.close(); Reader.showPage(+b.dataset.i);
     });
     Pop.open(anchor, n, { cls: 'panel-pop' });
-    if (Pop.cur) Pop.cur._from = '#topbar';
+    if (Pop.cur) Pop.cur._from = '#studyRail';
   },
 };
 

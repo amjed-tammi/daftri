@@ -4,7 +4,7 @@
 // ctx: book = جوّا الكتاب بس، lib = بالمكتبة بس، any = بكل مكان
 const Cmd = {
   // نضغط زر الشريط نفسه (بعد ما نطلّعه) حتى تفتح نوافذه بمكانها الطبيعي
-  tb(id) { return () => { Bars.show('#topbar'); setTimeout(() => { const b = $(id); if (b) b.click(); }, 200); }; },
+  tb(id) { return () => { document.body.classList.add('left-tools-open'); $('#studyToggle').setAttribute('aria-expanded', 'true'); setTimeout(() => { const b = $(id); if (b) b.click(); }, 200); }; },
   live() { return Editor.live.get(Editor.curPage) || [...Editor.live.values()][0]; },
   list() {
     const L = () => this.live();
@@ -13,7 +13,7 @@ const Cmd = {
       // الكتابة
       { id: 'insert', g: 'كتابة', icon: 'plus', label: 'إدراج…', en: 'insert add', ctx: 'book', act: this.tb('#tbInsert') },
       { id: 'math', g: 'كتابة', icon: 'math', label: 'معادلة (كسور، أسس، جذور، كيمياء)', en: 'equation math formula fraction power root chemistry', hint: 'Alt+=', ctx: 'book', act: need(l => MathEq.open(l)) },
-      { id: 'hours', g: 'دراسة', icon: 'timer', label: 'ساعات الدراسة هالأسبوع (لكل مادة)', en: 'study hours time stats week subject', ctx: 'any', act: () => Study.journalPanel() },
+      { id: 'hours', g: 'دراسة', icon: 'timer', label: 'دقائق الدراسة هالأسبوع (لكل مادة)', en: 'study minutes hours time stats week subject', ctx: 'any', act: () => Study.journalPanel() },
       { id: 'quick', g: 'كتابة', icon: 'edit', label: 'ملاحظة سريعة (للمسودات)', en: 'quick note inbox draft jot', hint: 'Alt+N', ctx: 'any', act: () => QuickNote.open() },
       { id: 'camera', g: 'كتابة', icon: 'image', label: 'صوّر السبورة أو ورقة (كاميرا)', en: 'camera photo board whiteboard scan', ctx: 'book', act: need(l => Camera.shoot(l)) },
       { id: 'note', g: 'كتابة', icon: 'note', label: 'ملاحظة لاصقة', en: 'sticky note', ctx: 'book', act: need(l => Stickies.addNote(l)) },
