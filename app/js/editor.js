@@ -885,7 +885,7 @@ const Stickies = {
   },
   addNote(l, pt) {
     const w = 200;
-    const s = { id: uid(), kind: 'note', w, x: Math.round(pt ? clamp(pt.x - w / 2, 10, PW - w - 10) : PW - w - 50), y: Math.round(pt ? clamp(pt.y - 20, 10, PH - 180) : 90), rot: +(Math.random() * 6 - 3).toFixed(1), color: this.COLORS[(Math.random() * this.COLORS.length) | 0], text: '' };
+    const s = { id: uid(), kind: 'note', w, x: Math.round(pt ? clamp(pt.x - w / 2, 10, PW - w - 10) : PW - w - 50), y: Math.round(pt ? clamp(pt.y - 20, 10, PH - 180) : 90), rot: 0, color: this.COLORS[(Math.random() * this.COLORS.length) | 0], text: '' };
     const d = this.add(l, s);
     setTimeout(() => $('.stx', d).focus(), 30);
   },
@@ -896,7 +896,7 @@ const Stickies = {
       const id = await Media.save(f);
       const w = size;
       const bx = pt ? pt.x - w / 2 : 70, by = pt ? pt.y - 60 : 110;
-      this.add(l, { id: uid(), kind: 'photo', blob: id, w, x: Math.round(clamp(bx + k * 28, -60, PW - w + 40)), y: Math.round(clamp(by + k * 34, 0, PH - 200)), rot: +(Math.random() * 8 - 4).toFixed(1), text: '' });
+      this.add(l, { id: uid(), kind: 'photo', blob: id, w, x: Math.round(clamp(bx + k * 28, -60, PW - w + 40)), y: Math.round(clamp(by + k * 34, 0, PH - 200)),rot: 0, text: '' });
       k++;
     }
   },
