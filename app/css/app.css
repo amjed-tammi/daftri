@@ -335,7 +335,7 @@ details.more-opts > :not(summary) { margin-top: 14px; }
 .sticky.photo { background: #fdfdfb; padding: 10px 10px 6px; box-shadow: 0 2px 3px rgba(0, 0, 0, .16), 0 16px 26px -12px rgba(0, 0, 0, .5); cursor: move; }
 .sticky.photo img { display: block; width: 100%; height: auto; min-height: 60px; pointer-events: none; user-select: none; background: #e3e0d8; }
 .stx.cap { font-size: 15px; text-align: center; padding-top: 6px; min-height: 22px; }
-.tape { position: absolute; top: -12px; left: 50%; width: 92px; height: 26px; transform: translateX(-50%) rotate(-2.5deg); background: rgba(250, 245, 225, .62); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); cursor: grab; }
+.tape { position: absolute; top: -12px; left: 50%; width: 92px; height: 26px;transform: translateX(-50%) rotate(0deg); background: rgba(250, 245, 225, .62); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); cursor: grab; }
 .note .tape { background: rgba(255, 255, 255, .45); }
 .s-x, .s-c { position: absolute; top: -10px; width: 24px; height: 24px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity .15s; padding: 0; z-index: 2; }
 .s-x { right: -10px; background: #2b3256; color: #fff; }
@@ -1433,3 +1433,11 @@ body.book-closed #selbar.docked { display: none; }
 .page.has-bg::after { opacity: .05; }
 .pg-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 0; pointer-events: none; user-select: none; }
 .page.has-bg .content:empty::before { content: none !important; }
+@media (hover: none) {
+  .sticky .s-x,
+  .sticky .s-c,
+  .sticky .s-rz,
+  .sticky .s-w {
+    opacity: 1;
+  }
+}

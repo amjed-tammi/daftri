@@ -346,6 +346,94 @@ const Toast = {
 // مخازن ميزة المراجعة والامتحانات (انشالت، وبترجع مع الـAI): بتضل بالقاعدة حتى ما تنمسح بيانات حدا، بس ما بينكتب فيها
 const LEGACY_STORES = ['cards', 'exams'];
 // الأجوبة المغطّاة (من ميزة المراجعة القديمة) ← نص عادي بمكانه
+function sanitizeImportedHtml(html) {
+  const t = document.createElement('template');
+  t.innerHTML = String(html || '');
+
+  const allowed = new Set(
+    'p div span br b strong i em u s sub sup h1 h2 h3 h4 h5 h6 blockquote ul ol li pre code a img video figure figcaption hr table thead tbody tfoot tr td th small svg g path rect circle line polyline polygon ellipse'.split(' ')
+  );
+
+  const drop = new Set(
+    'script style iframe object embed form input button select textarea template link meta base math foreignobject'.split(' ')
+  );
+
+  const attrs = new Set(
+    'class dir lang title alt contenteditable colspan rowspan controls preload playsinline width height target rel viewbox d fill stroke stroke-width stroke-linecap stroke-linejoin cx cy r x y x1 x2 y1 y2 points xmlns aria-hidden'.split(' ')
+  );
+
+  const styles = new Set(
+    'color background-color font-size font-family font-weight font-style text-decoration text-align direction line-height letter-spacing vertical-align white-space margin-left margin-right'.split(' ')
+  );
+
+  const clean = node => {
+    for (const child of [...node.children]) clean(child);
+
+    const tag = node.localName.toLowerCase();
+
+    if (!allowed.has(tag)) {
+      if (drop.has(tag)) node.remove();
+      else node.replaceWith(...node.childNodes);
+      return;
+    }
+
+    const rawStyle = node.getAttribute('style') || '';
+
+    for (const a of [...node.attributes]) {
+      const name = a.name.toLowerCase();
+      const value = a.value.trim();
+
+      if (name === 'style') {
+        node.removeAttribute(a.name);
+      } else if (name === 'href') {
+        if (tag !== 'a' || !/^(https?:\/\/|mailto:|#)/i.test(value)) {
+          node.removeAttribute(a.name);
+        }
+      } else if (name === 'target') {
+        if (tag !== 'a' || !['_blank', '_self'].includes(value)) {
+          node.removeAttribute(a.name);
+        }
+      } else if (
+        !attrs.has(name) &&
+        !/^data-[a-z0-9_-]+$/.test(name) &&
+        !/^aria-[a-z0-9_-]+$/.test(name)
+      ) {
+        node.removeAttribute(a.name);
+      }
+    }
+
+    if (rawStyle && node.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+      const probe = document.createElement('span');
+      probe.style.cssText = rawStyle;
+
+      const safe = [];
+
+      for (const prop of styles) {
+        const val = probe.style.getPropertyValue(prop);
+
+        if (
+          val &&
+          !/(url\s*\(|expression\s*\(|@import|var\s*\(|\\)/i.test(val)
+        ) {
+          safe.push(`${prop}:${val}`);
+        }
+      }
+
+      if (safe.length) {
+        node.setAttribute('style', safe.join(';'));
+      }
+    }
+
+    if (tag === 'a' && node.getAttribute('target') === '_blank') {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  };
+
+  for (const child of [...t.content.children]) clean(child);
+
+  return t.innerHTML;
+}
+
 function stripAns(html) {
   if (!html || !/class="ans\b/.test(html)) return html;
   const t = document.createElement('template'); t.innerHTML = html;

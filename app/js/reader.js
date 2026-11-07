@@ -11,7 +11,11 @@ const Reader = {
   async open(bookId, gotoPage = null) {
     const b = await DB.get('books', bookId);
     if (!b) return;
-    if (this.book) { Editor.flushAll(); this.saveBook(); }
+    if (this.book) {
+  Editor.flushAll();
+  this.saveBook();
+  this.saveBook.flush();
+}
     b.paper = { ...Settings.newPaper(), ...(b.paper || {}) };
     const recs = await DB.getMany('pages', b.pageIds);
     this.book = b;

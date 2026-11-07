@@ -333,9 +333,47 @@ const AutoBackup = {
   off() { this.c.on = false; Settings.save(); },
   // بصمة صغيرة للمكتبة: ما بنكتب نسخة إذا ما تغيّر شي
   async sig() {
-    const books = await DB.all('books');
-    const n = await Promise.all(['plans', 'journal', 'subjects', 'files', 'links'].map(s => DB.all(s).then(x => x.length)));
-    return books.length + ':' + Math.max(0, ...books.map(b => b.updated || 0)) + ':' + n.join(',');
+    const stores = [
+      'books',
+      'pages',
+      'plans',
+      'journal',
+      'subjects',
+      'files',
+      'links'
+    ];
+
+    let hash = 2166136261;
+    const counts = [];
+
+    for (const store of stores) {
+      const items = await DB.all(store);
+
+      counts.push(items.length);
+
+      items.sort((a, b) =>
+        String(a.id).localeCompare(String(b.id))
+      );
+
+      for (const item of items) {
+        const value = JSON.stringify(item);
+
+        for (let i = 0; i < value.length; i++) {
+          hash = Math.imul(
+            hash ^ value.charCodeAt(i),
+            16777619
+          );
+        }
+
+        hash = Math.imul(
+          hash ^ 10,
+          16777619
+        );
+      }
+    }
+
+    return counts.join(':') + ':' +
+      (hash >>> 0).toString(16);
   },
   async run(force = false, ask = false) {
     const c = this.c;
@@ -628,10 +666,11 @@ const Backup = {
     const files = (await DB.all('files')).filter(f => ids ? ids.includes(f.bookId) : true);
     files.forEach(f => ids2.add(f.blob));
     const plans = ids ? [] : await DB.all('plans');
+const journal = ids ? [] : await DB.all('journal');
     const blobs = [];
     for (const id of ids2) { const r = await DB.get('blobs', id); if (r) blobs.push({ id, type: r.type, data: await blobToDataURL(r.blob) }); }
     const pids = new Set(pages.map(p => p.id));
-    const blob = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pids.has(x.a) && pids.has(x.b)), subjects, files, plans })], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'daftari', v: 1, at: Date.now(), books, pages, blobs, links: (await DB.all('links')).filter(x => pids.has(x.a) && pids.has(x.b)), subjects, files, plans, journal })], { type: 'application/json' });
     return { blob, books };
   },
   // استعادة: من ملف بتختاره، أو ملف جاهز (مثلاً آخر نسخة بمجلد النسخ التلقائي)
@@ -649,7 +688,7 @@ const Backup = {
       await DB.put('blobs', { id: bl.id, blob, type: bl.type || blob.type, size: blob.size });
     }
     for (const x of data.links || []) if (!(await DB.get('links', x.id))) await DB.put('links', x);
-    for (const st of ['subjects', 'files', 'plans']) for (const x of data[st] || []) if (!(await DB.get(st, x.id))) await DB.put(st, x);
+    for (const st of ['subjects', 'files', 'plans', 'journal']) for (const x of data[st] || []) if (!(await DB.get(st, x.id))) await DB.put(st, x);
     await IdeaWeb.load();
     let added = 0, skipped = 0, updated = 0;
     for (const b of data.books || []) {
@@ -660,14 +699,14 @@ const Backup = {
         if (Reader.book && Reader.book.id === b.id) Reader.close();
         const gone = (mine.pageIds || []).filter(id => !(b.pageIds || []).includes(id));
         if (gone.length) await DB.delMany('pages', gone);
-        await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id).map(p => ({ ...p, html: stripAns(p.html) })));
+        await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id).map(p => ({ ...p, html: sanitizeImportedHtml(stripAns(p.html)), stickies: (p.stickies || []).map(s => ({ ...s, text: sanitizeImportedHtml(s.text || '') })) })));
         await DB.put('books', b);
         updated++; continue;
       }
       let t = b.title, n = 2;
       while (existing.some(x => normTitle(x.title) === normTitle(t))) t = `${b.title} (${n++})`;
       b.title = t;
-      await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id).map(p => ({ ...p, html: stripAns(p.html) })));
+      await DB.putMany('pages', (data.pages || []).filter(p => p.bookId === b.id).map(p => ({ ...p, html: sanitizeImportedHtml(stripAns(p.html)), stickies: (p.stickies || []).map(s => ({ ...s, text: sanitizeImportedHtml(s.text || '') })) })));
       await DB.put('books', b);
       existing.push(b); added++;
     }

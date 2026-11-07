@@ -48,12 +48,71 @@ const Share = {
       const pmap = new Map();
       const pages = (data.pages || []).filter(p => (ob.pageIds || []).includes(p.id));
       pages.forEach(p => pmap.set(p.id, 'p' + uid()));
+            // Create independent media for each imported book
+      const mediaIds = new Set();
+
+      if (nb.cover?.image) {
+        mediaIds.add(nb.cover.image);
+      }
+
+      pages.forEach(p =>
+        collectBlobs(p).forEach(id => mediaIds.add(id))
+      );
+
+      const mediaMap = new Map();
+
+      for (const oldId of mediaIds) {
+        const item = (data.blobs || []).find(
+          bl => bl.id === oldId
+        );
+
+        if (!item) continue;
+
+        const blob = dataURLToBlob(item.data);
+        const newId = await Media.save(blob);
+
+        mediaMap.set(oldId, newId);
+      }
+
+      const mapped = id => mediaMap.get(id) || null;
+
+      if (nb.cover?.image) {
+        nb.cover = {
+          ...nb.cover,
+          image: mapped(nb.cover.image)
+        };
+      }
+
       const np = pages.map(p => {
-        const html = stripAns(p.html || ''); // ملفات قديمة فيها أسئلة مراجعة: نص عادي
-        return { ...p, id: pmap.get(p.id), bookId: nb.id, html };
+        const html = sanitizeImportedHtml(stripAns(p.html || '')).replace(
+          /data-blob="([^"]+)"/g,
+          (_, id) => {
+            const fresh = mapped(id);
+            return fresh ? `data-blob="${fresh}"` : '';
+          }
+        );
+
+        return {
+          ...p,
+          id: pmap.get(p.id),
+          bookId: nb.id,
+          html,
+          bg: p.bg ? mapped(p.bg) : p.bg,
+          stickies: (p.stickies || []).map(s => ({
+            ...s,
+            blob: s.blob ? mapped(s.blob) : s.blob,
+            text: sanitizeImportedHtml(s.text || '')
+          })),
+          attach: (p.attach || []).map(a => ({
+            ...a,
+            blob: a.blob ? mapped(a.blob) : a.blob
+          }))
+        };
       });
-      nb.pageIds = (ob.pageIds || []).map(id => pmap.get(id)).filter(Boolean);
-      for (const bl of data.blobs || []) if (!(await DB.get('blobs', bl.id))) { const blob = dataURLToBlob(bl.data); await DB.put('blobs', { id: bl.id, blob, type: bl.type || blob.type, size: blob.size }); }
+
+      nb.pageIds = (ob.pageIds || [])
+        .map(id => pmap.get(id))
+        .filter(Boolean);
       await DB.putMany('pages', np);
       await DB.put('books', nb);
       for (const x of (data.links || []).filter(x => pmap.has(x.a) && pmap.has(x.b))) await DB.put('links', { ...x, id: 'w' + uid(), a: pmap.get(x.a), b: pmap.get(x.b), ab: nb.id, bb: nb.id });
